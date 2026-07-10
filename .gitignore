@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+.env.local
+.env*.local
+*.log
+.DS_Store
+tsconfig.tsbuildinfo
+
+# Local Claude Code session state — accumulates real command history (including secrets logged
+# in permission-allowlist entries) and per-machine process locks, never meant to be shared.
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
