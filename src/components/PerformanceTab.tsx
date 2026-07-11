@@ -144,7 +144,7 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
   const [selectedEditor, setSelectedEditor] = useState<string | null>(null);
   const [businessUnit, setBusinessUnit] = useState<string>(ALL_UNIT);
   const [editorFilter, setEditorFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey | null>("mainAdsCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   function handleSort(key: SortKey) {

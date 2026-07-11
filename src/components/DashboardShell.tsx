@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
 import clsx from "clsx";
-import { emptyFilters, type UiFilters } from "@/lib/clientFilters";
+import { defaultFilters, type UiFilters } from "@/lib/clientFilters";
 import { FiltersBar } from "./FiltersBar";
 import { SyncButton } from "./SyncButton";
 import { PerformanceTab } from "./PerformanceTab";
@@ -19,7 +19,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 export function DashboardShell() {
-  const [filters, setFilters] = useState<UiFilters>(emptyFilters);
+  const [filters, setFilters] = useState<UiFilters>(defaultFilters);
   const [activeTab, setActiveTab] = useState<TabKey>("performance");
   const { mutate } = useSWRConfig();
 
@@ -40,10 +40,17 @@ export function DashboardShell() {
     <div className="mx-auto max-w-6xl space-y-4 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-app-text">Editor Performance Dashboard</h1>
+          <h1 className="bg-gradient-to-r from-purple-300 via-purple-200 to-yellow-200 bg-clip-text text-2xl font-bold tracking-tight text-transparent">
+            AI Team Editor Performance Dashboard
+          </h1>
           <p className="text-sm text-app-muted">Productivity, creative performance, progress, and AI credit usage.</p>
         </div>
         <SyncButton onSynced={revalidateAll} />
+      </div>
+
+      <div className="flex items-center gap-2 rounded-lg border border-app-border bg-app-card px-3 py-2 text-xs text-app-muted">
+        <span aria-hidden>ℹ️</span>
+        <span>This data reflects only ads that were actually taken live on Meta — not scripts or work still in progress.</span>
       </div>
 
       <FiltersBar filters={filters} onChange={setFilters} />
