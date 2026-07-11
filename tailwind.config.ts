@@ -14,11 +14,13 @@ const config: Config = {
         // Same palette as "credits" (kept separate on purpose — the two names are used in
         // different files and renaming credits.* everywhere risked breaking working code for
         // no benefit). This is the whole app's dark theme now, not just AI Credits.
+        // True black base (not dark gray) for a more premium look, with card surfaces just
+        // barely lifted off it for depth — same approach as Linear/Vercel-style dark UIs.
         app: {
-          bg: "#0f1117",
-          card: "#1a1d2e",
-          border: "#2d3148",
-          text: "#e2e8f0",
+          bg: "#000000",
+          card: "#0a0a0d",
+          border: "#1f2129",
+          text: "#f1f5f9",
           muted: "#94a3b8",
           dim: "#64748b",
         },
