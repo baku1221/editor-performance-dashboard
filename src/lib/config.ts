@@ -75,12 +75,12 @@ function parseManualDriveLinkOverrides(value: string | undefined): Record<string
   return map;
 }
 
-// Explicit, user-confirmed exceptions where Meta's created_time doesn't reflect when a video was
-// actually made — confirmed real case: duplicating an ad on Meta stamps the duplicate with a
-// fresh created_time at the moment of duplication, not the original creation date, so a video
-// scripted in June can show as "created" in July once its live ad gets duplicated. Overrides
-// createdDate for the given ad id so date-range filtering (e.g. "This month") reflects the
-// video's real origin instead of Meta's duplicate-timestamp artifact.
+// User policy: an ad only counts toward a given month if it was BOTH scripted AND published live
+// in that month. Confirmed real case: a batch of ads scripted in June went live on Meta in the
+// first few hours of July 1 IST — genuinely June-origin work (each concept is logged in the
+// source sheet's June tab, not July), just published a few hours late across the month
+// boundary. Overrides createdDate for the given ad id so date-range filtering (e.g. "This
+// month") reflects when the video was actually made, not its technical publish timestamp.
 // Format: "metaAdId|yyyy-MM-dd,metaAdId2|yyyy-MM-dd".
 function parseCreatedDateOverrides(value: string | undefined): Record<string, string> {
   const map: Record<string, string> = {};
