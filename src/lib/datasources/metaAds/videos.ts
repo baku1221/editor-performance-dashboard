@@ -211,7 +211,7 @@ export async function fetchPublishedVideos(): Promise<PublishedVideo[]> {
         adName: ad.name,
         editorName,
         videoKind: parseVideoKindFromAdTitle(ad.name) ?? matchVideoKindByCutMention(ad.name),
-        createdDate: normalizeToIsoDate(ad.created_time),
+        createdDate: config.createdDateOverrides[ad.id] ?? normalizeToIsoDate(ad.created_time),
         effectiveStatus: ad.effective_status,
         spend,
         impressions: Number(insight?.impressions || 0),

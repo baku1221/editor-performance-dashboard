@@ -1,45 +1,36 @@
 import { config } from "../config";
+import { store } from "../cache/store";
 import { runSync } from "./syncService";
 
-const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — coarse enough to be cheap, fine enough not to miss the target hour
-
-/** IST hour + calendar date, independent of whatever timezone the server itself runs in. */
-function istParts(date: Date): { hour: number; dateKey: string } {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-
-  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return { hour: Number(get("hour")), dateKey: `${get("year")}-${get("month")}-${get("day")}` };
-}
+const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — coarse enough to be cheap, fine enough not to drift far past the target interval
 
 interface SchedulerState {
   started: boolean;
-  lastAutoSyncDateKey: string | null;
 }
 
 // Same globalThis trick as cache/store.ts — survives Next.js dev-mode module reloads so the
 // interval doesn't get duplicated on every hot reload.
 const globalForScheduler = globalThis as unknown as { __editorDashboardScheduler?: SchedulerState };
-const state: SchedulerState = globalForScheduler.__editorDashboardScheduler ?? { started: false, lastAutoSyncDateKey: null };
+const state: SchedulerState = globalForScheduler.__editorDashboardScheduler ?? { started: false };
 globalForScheduler.__editorDashboardScheduler = state;
 
+/**
+ * Fires a sync once at least intervalHours have passed since the last sync — whichever kind:
+ * this reads store.syncStatus.lastSyncedAt directly (the same field the manual "Sync now" button
+ * updates), so clicking the button resets the clock and the next auto-sync waits a full interval
+ * from THAT click, instead of double-syncing shortly after.
+ */
 async function checkAndSync(): Promise<void> {
-  const { hour, dateKey } = istParts(new Date());
-  if (hour !== config.autoSync.hourIst) return;
-  if (state.lastAutoSyncDateKey === dateKey) return; // already synced during this hour today
+  const intervalMs = config.autoSync.intervalHours * 60 * 60 * 1000;
+  const lastSyncedAt = store.syncStatus.lastSyncedAt;
+  const elapsedMs = lastSyncedAt ? Date.now() - new Date(lastSyncedAt).getTime() : Infinity;
+  if (elapsedMs < intervalMs) return;
 
-  state.lastAutoSyncDateKey = dateKey;
   try {
     await runSync();
-    console.log(`[scheduler] Daily auto-sync completed at ${new Date().toISOString()} (IST date ${dateKey})`);
+    console.log(`[scheduler] Auto-sync completed at ${new Date().toISOString()} (interval: ${config.autoSync.intervalHours}h)`);
   } catch (err) {
-    console.error("[scheduler] Daily auto-sync failed:", err);
+    console.error("[scheduler] Auto-sync failed:", err);
   }
 }
 
@@ -49,7 +40,7 @@ export function startDailySyncScheduler(): void {
   if (state.started) return;
   state.started = true;
 
-  console.log(`[scheduler] Daily auto-sync enabled — will run once daily around ${config.autoSync.hourIst}:00 IST.`);
+  console.log(`[scheduler] Auto-sync enabled — will run every ${config.autoSync.intervalHours} hours since the last sync (manual or auto).`);
   setInterval(() => {
     checkAndSync().catch((err) => console.error("[scheduler] Unexpected error:", err));
   }, CHECK_INTERVAL_MS);
