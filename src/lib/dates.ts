@@ -1,4 +1,4 @@
-import { format, isValid, parse, parseISO } from "date-fns";
+import { format, isValid, parse } from "date-fns";
 
 // The real sheets use day-first slash dates ("25/05/2026", "1/07/26") — JS's
 // generic `new Date(...)` parses ambiguous slash dates as US month-first and
@@ -16,8 +16,15 @@ export function normalizeToIsoDate(raw: string): string {
   const trimmed = raw.trim();
   if (!trimmed) return "";
 
-  const iso = parseISO(trimmed);
-  if (isValid(iso) && /^\d{4}-\d{2}-\d{2}/.test(trimmed)) return format(iso, "yyyy-MM-dd");
+  // Already yyyy-MM-dd, optionally with a time/offset suffix (e.g. Meta's created_time
+  // "2026-07-01T00:57:48+0530") — take the date portion directly instead of round-tripping
+  // through a parsed Date + format(). Confirmed real bug: format() renders using the RUNNING
+  // PROCESS's local system timezone, which silently shifts the calendar date by a day for
+  // timestamps near midnight when two environments run in different timezones — a Mac in IST
+  // and a Railway container in UTC gave different dates for the same "00:57 IST" ad, in turn
+  // pushing that ad below the account's since-date boundary on one of them. Meta already reports
+  // the date in the ad account's own timezone; slicing sidesteps environment-dependent re-rendering.
+  if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
 
   if (trimmed.includes("/")) {
     for (const pattern of SLASH_DATE_FORMATS) {

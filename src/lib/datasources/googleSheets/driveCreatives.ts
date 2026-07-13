@@ -6,6 +6,31 @@ export interface DriveCreativeRow {
   editorName: string;
   name: string; // ad title, as entered in this sheet
   driveLink: string; // Drive folder URL containing the source video file
+  sourceMonth: string; // "yyyy-MM", parsed from the tab name (e.g. "July 2026" -> "2026-07")
+}
+
+const MONTH_NUMBERS: Record<string, string> = {
+  january: "01",
+  february: "02",
+  march: "03",
+  april: "04",
+  may: "05",
+  june: "06",
+  july: "07",
+  august: "08",
+  september: "09",
+  october: "10",
+  november: "11",
+  december: "12",
+};
+
+/** Parses a tab name like "July 2026" into "2026-07" — empty string if it doesn't match that shape. */
+function parseTabMonth(tabName: string): string {
+  const match = tabName.trim().toLowerCase().match(/^([a-z]+)\s+(\d{4})$/);
+  if (!match) return "";
+  const [, monthName, year] = match;
+  const monthNumber = monthName ? MONTH_NUMBERS[monthName] : undefined;
+  return monthNumber ? `${year}-${monthNumber}` : "";
 }
 
 const HEADER_ALIASES = {
@@ -82,6 +107,7 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
       try {
         const { headers, rows: dataRows } = await fetchSheetTable(sheet.sheetId, tab);
         const locator = buildColumnLocator(headers);
+        const sourceMonth = parseTabMonth(tab);
 
         for (const row of dataRows) {
           const driveLink = cellAt(row, locator.link);
@@ -93,6 +119,7 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
             editorName: cellAt(row, locator.editorName),
             name,
             driveLink,
+            sourceMonth,
           });
         }
       } catch (err) {
