@@ -75,6 +75,22 @@ function parseManualDriveLinkOverrides(value: string | undefined): Record<string
   return map;
 }
 
+// Explicit, user-confirmed exceptions where Meta's created_time doesn't reflect when a video was
+// actually made — confirmed real case: duplicating an ad on Meta stamps the duplicate with a
+// fresh created_time at the moment of duplication, not the original creation date, so a video
+// scripted in June can show as "created" in July once its live ad gets duplicated. Overrides
+// createdDate for the given ad id so date-range filtering (e.g. "This month") reflects the
+// video's real origin instead of Meta's duplicate-timestamp artifact.
+// Format: "metaAdId|yyyy-MM-dd,metaAdId2|yyyy-MM-dd".
+function parseCreatedDateOverrides(value: string | undefined): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const entry of csv(value)) {
+    const [adId, date] = entry.split("|").map((s) => s.trim());
+    if (adId && date) map[adId] = date;
+  }
+  return map;
+}
+
 // Override the global winning rule for specific business units — e.g. Astrotalk Store is a
 // Purchase-objective/e-commerce account, so "Winning" there means total spend crossing a
 // threshold, not CPI/CPA like the app-install accounts. Format: "Business Unit|metric|operator|value".
@@ -160,6 +176,7 @@ export const config = {
     },
   ].filter((s) => s.sheetId),
   manualDriveLinkOverrides: parseManualDriveLinkOverrides(process.env.DRIVE_LINK_MANUAL_OVERRIDES),
+  createdDateOverrides: parseCreatedDateOverrides(process.env.CREATED_DATE_MANUAL_OVERRIDES),
   googleDrive: {
     // Needed to read video duration from the Drive folders referenced above — a plain Sheets
     // API key does NOT also grant Drive API access; the Drive API must be separately enabled
@@ -175,10 +192,11 @@ export const config = {
   winningRuleOverrides: parseWinningRuleOverrides(process.env.WINNING_RULE_OVERRIDES),
   // Runs inside the app itself (see instrumentation.ts + services/scheduler.ts) — only fires
   // while a persistent server process is up, which is exactly the hosting model this app needs
-  // anyway (see cache/store.ts). Hour is IST regardless of the server's own timezone.
+  // anyway (see cache/store.ts). Fires every intervalHours since the last sync (manual click or
+  // auto), not tied to a fixed clock hour.
   autoSync: {
     enabled: (process.env.AUTO_SYNC_ENABLED ?? "true") !== "false",
-    hourIst: Number(process.env.AUTO_SYNC_HOUR_IST ?? 1),
+    intervalHours: Number(process.env.AUTO_SYNC_INTERVAL_HOURS ?? 12),
   },
 };
 
