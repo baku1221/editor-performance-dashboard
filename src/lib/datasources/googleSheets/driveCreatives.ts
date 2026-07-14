@@ -41,7 +41,14 @@ const HEADER_ALIASES = {
   editorName: ["editor"],
   link: ["link"],
   metaAdId: ["metaadid"],
-  dateMade: ["date", "uploaddates"],
+  // Deliberately NOT a bare "date" alias — confirmed real bug: the Lumus sheet has a "Live date"
+  // column (Meta-publish-related, always blank in practice) whose normalized text "livedate"
+  // contains "date" as a substring, so a bare "date" alias matched IT instead of the sheet's real
+  // per-row creation date (a blank-header column with genuine values like "1/7/2026", located via
+  // the link+1 positional fallback below) — every Lumus row silently fell back to the tab's own
+  // month instead of its actual day. "uploaddates" is kept as a specific, safe alias for a sheet
+  // that genuinely labels this column that way.
+  dateMade: ["uploaddates"],
   category: ["category"],
 } as const;
 
@@ -80,11 +87,10 @@ function buildColumnLocator(headers: string[]): Partial<Record<Field, number>> {
     locator.dateMade = locator.category + 1;
   }
 
-  // Same story one column over on the Lumus sheet: its "Upload Dates" column is properly labeled
-  // on the July tab (confirmed real values do land there on some rows), but the same column on
-  // the June tab has a blank header cell — same schema, header just isn't always filled in.
-  // Reliably the column immediately after "Link" when blank; guarded the same way as above so it
-  // can't misfire on a sheet where Link is genuinely followed by another labeled column.
+  // Same story one column over on the Lumus sheet — genuine per-row dates ("1/7/2026" etc.,
+  // 100% populated on July, sparser on June) sit in a blank-header column immediately after
+  // "Link" on both tabs. Guarded the same way as above so it can't misfire on a sheet where Link
+  // is genuinely followed by another labeled column.
   if (locator.dateMade === undefined && locator.link !== undefined && !normalized[locator.link + 1]) {
     locator.dateMade = locator.link + 1;
   }
