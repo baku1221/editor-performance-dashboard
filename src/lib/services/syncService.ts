@@ -47,15 +47,6 @@ function stageSegment(title: string): string {
   return segments.length >= 3 ? (segments[1] ?? "").toLowerCase() : "";
 }
 
-/** Last calendar day of a "yyyy-MM" month, as "yyyy-MM-dd". */
-function lastDayOfMonth(yyyyMM: string): string {
-  const [year, month] = yyyyMM.split("-").map(Number);
-  const y = year ?? 1970;
-  const m = month ?? 1;
-  const lastDay = new Date(y, m, 0).getDate(); // day 0 of next month = last day of this one
-  return `${yyyyMM}-${String(lastDay).padStart(2, "0")}`;
-}
-
 /**
  * A sheet row is sometimes logged in both the June and July tabs (carried over verbatim while
  * still relevant) — same underlying video, would otherwise double-count. Dedupes by business
@@ -174,15 +165,15 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       // ad sharing this normalized title, not whichever duplicate happened to get matched.
       const metaCreatedDate = metaIndex.earliestCreatedByNormalizedTitle.get(normalizeTitleForMatching(row.name)) ?? matched.createdDate;
 
-      // Month-boundary correction: a video scripted last month that happens to go live on Meta
-      // in the first few hours of this month shouldn't count toward this month — the sheet tab
-      // it's logged under is ground truth for when it was actually made. Scoped to day-1 to
-      // avoid reclassifying ads that are legitimately from a different month for other reasons.
-      let createdDate = metaCreatedDate;
-      const day = createdDate.slice(8, 10);
-      if (day === "01" && row.sourceMonth && row.sourceMonth < createdDate.slice(0, 7)) {
-        createdDate = lastDayOfMonth(row.sourceMonth);
-      }
+      // Date-range filtering/aggregation reflects when the ad was actually MADE (per the sheet),
+      // not when it happened to go live on Meta — confirmed real gap: 97% of live ads across the
+      // dashboard have a publish lag between the sheet's dateMade and Meta's created_time (a few
+      // hours to over a week in some cases), which meant selecting e.g. "this week" was silently
+      // showing ads by publish date instead of the editor's actual work date. sheetCreatedDate is
+      // ground truth here; Meta's date is only a fallback for the rare row with no sheet date at
+      // all (no per-row date AND a tab name that doesn't parse as a month, e.g. a future sheet
+      // that isn't organized by month).
+      const createdDate = sheetCreatedDate || metaCreatedDate;
 
       const video: PublishedVideo = {
         id: matched.id,
