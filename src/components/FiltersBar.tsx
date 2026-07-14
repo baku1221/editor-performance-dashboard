@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { jsonFetcher } from "@/lib/swrFetcher";
 import { emptyFilters, type UiFilters } from "@/lib/clientFilters";
 import { DateRangePicker } from "./DateRangePicker";
+import { AddEditorButton } from "./AddEditorButton";
 
 const fieldClass =
   "rounded-lg border border-app-border bg-app-bg px-2.5 py-1.5 text-sm text-app-text focus:border-purple-400 focus:outline-none";
@@ -15,7 +17,8 @@ export function FiltersBar({
   filters: UiFilters;
   onChange: (next: UiFilters) => void;
 }) {
-  const { data: editors } = useSWR<string[]>("/api/editors", jsonFetcher);
+  const { data: editors, mutate: mutateEditors } = useSWR<string[]>("/api/editors", jsonFetcher);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
 
   function setDateRange(from: string, to: string) {
     onChange({ ...filters, from, to });
@@ -40,6 +43,19 @@ export function FiltersBar({
           ))}
         </select>
       </div>
+
+      <AddEditorButton
+        onAdded={(name) => {
+          mutateEditors();
+          setJustAdded(name);
+          window.setTimeout(() => setJustAdded(null), 4000);
+        }}
+      />
+      {justAdded && (
+        <span className="text-xs text-green-400">
+          Added "{justAdded}" — click "Sync now" to pick up their ads.
+        </span>
+      )}
 
       <button
         onClick={() => onChange(emptyFilters)}
