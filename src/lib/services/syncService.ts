@@ -29,6 +29,23 @@ function isSubsetEitherWay(a: Set<string>, b: Set<string>): boolean {
   return true;
 }
 
+/** The first "|"-delimited segment — the concept/hookline name, before the "V# - Stage" and editor/pod/talent segments. */
+function conceptSegment(title: string): string {
+  return title.split("|")[0]?.trim() ?? "";
+}
+
+/**
+ * The middle "|"-delimited segment (e.g. "V1 - Main", "V2 - Cut 1"), lowercased — only present
+ * (non-empty) when the title has at least 3 pipe segments, same convention as
+ * parseVideoKindFromAdTitle. Specific enough that two unrelated concepts essentially never share
+ * one, which is what makes it safe to require an exact match on this alone in matchMetaAd's
+ * concept-subset fallback below.
+ */
+function stageSegment(title: string): string {
+  const segments = title.split("|").map((s) => s.trim()).filter(Boolean);
+  return segments.length >= 3 ? (segments[1] ?? "").toLowerCase() : "";
+}
+
 /** Last calendar day of a "yyyy-MM" month, as "yyyy-MM-dd". */
 function lastDayOfMonth(yyyyMM: string): string {
   const [year, month] = yyyyMM.split("-").map(Number);
@@ -73,6 +90,21 @@ function dedupeRows(rows: DriveCreativeRow[]): DriveCreativeRow[] {
  * differ by a swapped word (e.g. "...front main" vs "...side main" both stay unmatched here,
  * correctly, since neither is a subset of the other).
  *
+ * A final fallback handles nomenclature drift specifically in the editor/pod/talent segment —
+ * confirmed real case: sheet row "washroom_stall_lumus | V1 - Main | Rohan Boro - SYAT -
+ * Ridhima-PPP" vs the live Meta ad "washroom stall | V1 - Main | Rohan Boro - SYAT - Shreya-PPP":
+ * the concept segment has an extra "_lumus" suffix (an addition, already caught above) but the
+ * talent name is a straight substitution (Ridhima -> Shreya, presumably a reshoot with a
+ * different talent) — a substitution never satisfies the whole-title subset check no matter how
+ * small, so titles like this fell through as unmatched. Scoped tighter than a blanket
+ * title-similarity match to stay safe: only for accounts using the "Concept | V# - Stage |
+ * editor/pod/talent" convention (gated on parseVideoKindFromAdTitle succeeding — the Astrotalk
+ * Store account's hookline-style titles don't have a real "stage" segment here, so this never
+ * fires for them), and requires the *stage* segment (e.g. "v2 - cut 1") to match exactly — that
+ * segment is specific enough that two different concepts essentially never collide on it — plus
+ * a same-business-unit check and a word-subset match scoped to just the concept segment, entirely
+ * ignoring the editor/pod/talent segment where the actual drift happens.
+ *
  * `claimedAdIds` prevents two different sheet rows from both matching the same live ad (e.g. if
  * dedupeRows missed a near-duplicate title) — first row to claim an ad id wins, everything after
  * is left unmatched rather than double-counted as "live" under two different rows.
@@ -84,6 +116,20 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
     (() => {
       const rowWords = titleWordSet(row.name);
       const matches = metaIndex.all.filter((rec) => isSubsetEitherWay(titleWordSet(rec.adName), rowWords));
+      const uniqueIds = new Set(matches.map((rec) => rec.id));
+      return uniqueIds.size === 1 ? matches[0] : undefined;
+    })() ??
+    (() => {
+      const rowStage = stageSegment(row.name);
+      if (!rowStage || parseVideoKindFromAdTitle(row.name) === null) return undefined;
+
+      const rowConceptWords = titleWordSet(conceptSegment(row.name));
+      const matches = metaIndex.all.filter(
+        (rec) =>
+          rec.businessUnit === row.businessUnit &&
+          stageSegment(rec.adName) === rowStage &&
+          isSubsetEitherWay(titleWordSet(conceptSegment(rec.adName)), rowConceptWords)
+      );
       const uniqueIds = new Set(matches.map((rec) => rec.id));
       return uniqueIds.size === 1 ? matches[0] : undefined;
     })();
