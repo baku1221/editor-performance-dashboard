@@ -1,6 +1,6 @@
 import type { PublishedVideo, SyncStatus } from "../types";
 import { store } from "../cache/store";
-import { config } from "../config";
+import { config, type EditorRosterEntry } from "../config";
 import { fetchProgressTracker } from "../datasources/googleSheets/progressTracker";
 import { fetchDriveCreativeRows, normalizeTitleForMatching, type DriveCreativeRow } from "../datasources/googleSheets/driveCreatives";
 import { fetchMetaAdsIndex, type MetaAdRecord, type MetaAdsIndex } from "../datasources/metaAds/videos";
@@ -14,6 +14,7 @@ import {
 } from "../services/editorTitleParser";
 import { progressRepository } from "../repositories/progressRepository";
 import { publishedVideoRepository } from "../repositories/publishedVideoRepository";
+import { editorRosterRepository } from "../repositories/editorRosterRepository";
 import { applyWinningRule } from "./winningRule";
 
 function titleWordSet(title: string): Set<string> {
@@ -146,7 +147,7 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
  * means nothing to build), but a Meta-match/duration failure for an individual row just leaves
  * that row not-live/without duration rather than failing the whole sync.
  */
-async function buildVideosFromSheets(metaIndex: MetaAdsIndex): Promise<PublishedVideo[]> {
+async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRosterEntry[]): Promise<PublishedVideo[]> {
   const rawRows = await fetchDriveCreativeRows();
   const rows = dedupeRows(rawRows);
 
@@ -159,20 +160,25 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex): Promise<Published
     const matched = matchMetaAd(row, metaIndex, claimedAdIds);
 
     const rawEditorName = row.editorName || parseEditorFromAdTitle(row.name);
-    const editorName = normalizeEditorName(rawEditorName, config.editorRoster) ?? matchEditorBySegmentScan(row.name, config.editorRoster);
+    const editorName = normalizeEditorName(rawEditorName, roster) ?? matchEditorBySegmentScan(row.name, roster);
     const videoKind = parseVideoKindFromAdTitle(row.name) ?? matchVideoKindByCutMention(row.name);
     const durationSeconds = row.driveLink ? durationsByLink.get(row.driveLink) ?? null : null;
     const sheetCreatedDate = row.dateMade || (row.sourceMonth ? `${row.sourceMonth}-01` : "");
 
     if (matched) {
+      // The same ad concept is frequently duplicated multiple times within the same testing
+      // campaign (confirmed real case: two ad objects for the same concept 15 minutes apart) —
+      // each duplicate is its own ad object with its own created_time, and matchMetaAd's various
+      // stages can land on any one of them. Published Date should read as "when this concept was
+      // first created for testing", so it's always the earliest created_time seen across every
+      // ad sharing this normalized title, not whichever duplicate happened to get matched.
+      const metaCreatedDate = metaIndex.earliestCreatedByNormalizedTitle.get(normalizeTitleForMatching(row.name)) ?? matched.createdDate;
+
       // Month-boundary correction: a video scripted last month that happens to go live on Meta
       // in the first few hours of this month shouldn't count toward this month — the sheet tab
       // it's logged under is ground truth for when it was actually made. Scoped to day-1 to
       // avoid reclassifying ads that are legitimately from a different month for other reasons.
-      // Only affects createdDate (used for filtering/aggregation) — publishedDate below always
-      // keeps Meta's raw value, since that column answers "when did this actually go live", not
-      // "which month should this count toward".
-      let createdDate = matched.createdDate;
+      let createdDate = metaCreatedDate;
       const day = createdDate.slice(8, 10);
       if (day === "01" && row.sourceMonth && row.sourceMonth < createdDate.slice(0, 7)) {
         createdDate = lastDayOfMonth(row.sourceMonth);
@@ -188,7 +194,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex): Promise<Published
         videoKind,
         createdDate,
         sheetCreatedDate,
-        publishedDate: matched.createdDate,
+        publishedDate: metaCreatedDate,
         effectiveStatus: matched.effectiveStatus,
         takenLive: true,
         spend: matched.spend,
@@ -250,7 +256,12 @@ export async function recomputeWinningFlags(): Promise<void> {
  * intentionally untouched here; they only update via CSV upload.
  */
 export async function runSync(): Promise<SyncStatus> {
-  const [progressResult, metaIndexResult] = await Promise.allSettled([fetchProgressTracker(), fetchMetaAdsIndex()]);
+  // Env-configured EDITOR_ROSTER + any editors added via the dashboard's "Add editor" UI —
+  // fetched once per sync so a newly-added editor is recognized in both the Progress Tracker
+  // sheet and the AI Creatives sheets on the very next sync.
+  const roster = await editorRosterRepository.getEffective();
+
+  const [progressResult, metaIndexResult] = await Promise.allSettled([fetchProgressTracker(roster), fetchMetaAdsIndex()]);
 
   const fetchedAt = new Date().toISOString();
 
@@ -268,10 +279,12 @@ export async function runSync(): Promise<SyncStatus> {
   // Meta is an enrichment source now — if it fails, videos still get built from the sheets alone
   // (just all not-live), rather than losing the whole sync.
   const metaIndex: MetaAdsIndex =
-    metaIndexResult.status === "fulfilled" ? metaIndexResult.value : { byAdId: new Map(), byNormalizedTitle: new Map(), all: [] };
+    metaIndexResult.status === "fulfilled"
+      ? metaIndexResult.value
+      : { byAdId: new Map(), byNormalizedTitle: new Map(), earliestCreatedByNormalizedTitle: new Map(), all: [] };
 
   try {
-    const videos = await buildVideosFromSheets(metaIndex);
+    const videos = await buildVideosFromSheets(metaIndex, roster);
     await publishedVideoRepository.replaceAll(videos);
     store.syncStatus.sources.metaAds =
       metaIndexResult.status === "fulfilled"

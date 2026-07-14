@@ -7,6 +7,10 @@ out
 .DS_Store
 tsconfig.tsbuildinfo
 
+# Editors added via the dashboard's "Add editor" UI (see editorRosterRepository.ts) — runtime
+# state, not source; each environment (local/Railway) keeps its own.
+data/custom-editors.json
+
 # Local Claude Code session state — accumulates real command history (including secrets logged
 # in permission-allowlist entries) and per-machine process locks, never meant to be shared.
 .claude/settings.local.json

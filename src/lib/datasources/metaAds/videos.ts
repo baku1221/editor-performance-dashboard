@@ -64,6 +64,17 @@ export interface MetaAdRecord {
 export interface MetaAdsIndex {
   byAdId: Map<string, MetaAdRecord>;
   byNormalizedTitle: Map<string, MetaAdRecord>;
+  /**
+   * Every configured account/campaign is itself a "testing" campaign (confirmed: all 3 real
+   * campaign names contain "testing" — e.g. "USA_Lumus_Android_Install_testing-PPP"). An ad
+   * concept is still frequently duplicated multiple times *within* that same testing campaign
+   * (confirmed real case: two ad objects both named "...Have you ever been cheated on..." 15
+   * minutes apart) — each duplicate is its own ad object with its own created_time. Published
+   * Date should read as "when this concept was first created for testing", not whichever
+   * duplicate `byNormalizedTitle`'s last-write-wins happens to keep. Keyed the same way as
+   * byNormalizedTitle; value is the minimum created_time seen across every ad sharing that key.
+   */
+  earliestCreatedByNormalizedTitle: Map<string, string>;
   all: MetaAdRecord[];
 }
 
@@ -219,6 +230,7 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
 
   const byAdId = new Map<string, MetaAdRecord>();
   const byNormalizedTitle = new Map<string, MetaAdRecord>();
+  const earliestCreatedByNormalizedTitle = new Map<string, string>();
   const all: MetaAdRecord[] = [];
 
   for (const { accountId, ads, insights } of perAccount) {
@@ -249,11 +261,16 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
         durationSeconds: videoId ? videoDurations.get(videoId) ?? null : null,
       };
 
+      const key = normalizeTitleForMatching(record.adName);
       byAdId.set(record.id, record);
-      byNormalizedTitle.set(normalizeTitleForMatching(record.adName), record);
+      byNormalizedTitle.set(key, record);
+      const existingEarliest = earliestCreatedByNormalizedTitle.get(key);
+      if (!existingEarliest || record.createdDate < existingEarliest) {
+        earliestCreatedByNormalizedTitle.set(key, record.createdDate);
+      }
       all.push(record);
     }
   }
 
-  return { byAdId, byNormalizedTitle, all };
+  return { byAdId, byNormalizedTitle, earliestCreatedByNormalizedTitle, all };
 }

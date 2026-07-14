@@ -1,5 +1,5 @@
 import type { ProgressItem, ProgressStatus } from "../../types";
-import { config } from "../../config";
+import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
 import { fetchSheetTable } from "./client";
@@ -65,8 +65,13 @@ function cellAt(row: string[], index: number | undefined): string {
   return row[index] ?? "";
 }
 
-/** Fetches + merges the configured progress-tracker tabs (see config.googleSheets.progressTracker.tabs). */
-export async function fetchProgressTracker(): Promise<ProgressItem[]> {
+/**
+ * Fetches + merges the configured progress-tracker tabs (see config.googleSheets.progressTracker.tabs).
+ * `roster` defaults to the env-configured EDITOR_ROSTER but callers pass the merged roster
+ * (env + editors added via the dashboard's "Add editor" UI) so newly-added editors are
+ * recognized here too, not just in Meta-video attribution.
+ */
+export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.editorRoster): Promise<ProgressItem[]> {
   const { sheetId, tabs } = config.googleSheets.progressTracker;
   if (!sheetId) {
     throw new Error("PROGRESS_TRACKER_SHEET_ID is not set in .env.local");
@@ -92,7 +97,7 @@ export async function fetchProgressTracker(): Promise<ProgressItem[]> {
 
         items.push({
           id: `${tab.name}::${index}`,
-          editorName: editorNameRaw ? (normalizeEditorName(editorNameRaw, config.editorRoster) ?? editorNameRaw) : "Unassigned",
+          editorName: editorNameRaw ? (normalizeEditorName(editorNameRaw, roster) ?? editorNameRaw) : "Unassigned",
           videoName: cellAt(row, locator.adName).trim(),
           currentStage: statusRaw,
           status: normalizeStatus(statusRaw),
