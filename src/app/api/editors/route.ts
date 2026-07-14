@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions, isAdminEmail } from "@/lib/auth";
 import { publishedVideoRepository } from "@/lib/repositories/publishedVideoRepository";
 import { progressRepository } from "@/lib/repositories/progressRepository";
 import { editorRosterRepository } from "@/lib/repositories/editorRosterRepository";
@@ -19,8 +21,16 @@ export async function GET() {
  * who isn't in that list yet can be recognized — takes effect on the next sync (see
  * syncService.ts's runSync, which re-fetches the merged roster every time). Body:
  * { name: string, aliases?: string[] }.
+ *
+ * Restricted beyond just "signed in" (which the whole app already requires via middleware.ts) —
+ * only ADMIN_EMAILS can mutate the roster; everyone else in the org can still view the dashboard.
  */
 export async function POST(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!isAdminEmail(session?.user?.email)) {
+    return NextResponse.json({ error: "Only an admin can add editors." }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const aliases = Array.isArray(body?.aliases) ? body.aliases.filter((a: unknown): a is string => typeof a === "string" && a.trim().length > 0).map((a: string) => a.trim()) : [];

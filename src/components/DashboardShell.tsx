@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useSWRConfig } from "swr";
+import { useSession, signOut } from "next-auth/react";
 import clsx from "clsx";
 import { defaultFilters, type UiFilters } from "@/lib/clientFilters";
 import { FiltersBar } from "./FiltersBar";
@@ -22,6 +23,7 @@ export function DashboardShell() {
   const [filters, setFilters] = useState<UiFilters>(defaultFilters);
   const [activeTab, setActiveTab] = useState<TabKey>("performance");
   const { mutate } = useSWRConfig();
+  const { data: session } = useSession();
 
   const revalidateAll = useCallback(() => {
     mutate(() => true);
@@ -45,7 +47,14 @@ export function DashboardShell() {
           </h1>
           <p className="text-sm text-app-muted">Productivity, creative performance, progress, and AI credit usage.</p>
         </div>
-        <SyncButton onSynced={revalidateAll} />
+        <div className="flex items-center gap-3">
+          {session?.user?.email && (
+            <span className="text-xs text-app-muted">
+              {session.user.email} · <button onClick={() => signOut()} className="underline hover:text-app-text">Sign out</button>
+            </span>
+          )}
+          <SyncButton onSynced={revalidateAll} />
+        </div>
       </div>
 
       <div className="flex items-center gap-2 rounded-lg border border-app-border bg-app-card px-3 py-2 text-xs text-app-muted">
