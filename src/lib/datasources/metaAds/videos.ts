@@ -1,13 +1,6 @@
-import type { PublishedVideo } from "../../types";
 import { config, isMetaAdsConfigured } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
-import {
-  parseEditorFromAdTitle,
-  parseVideoKindFromAdTitle,
-  normalizeEditorName,
-  matchEditorBySegmentScan,
-  matchVideoKindByCutMention,
-} from "../../services/editorTitleParser";
+import { normalizeTitleForMatching } from "../googleSheets/driveCreatives";
 import { metaGraphGetAllPages, metaGraphGetByIds } from "./client";
 
 interface MetaAction {
@@ -41,6 +34,37 @@ interface MetaCreative {
 
 interface MetaVideo {
   length?: number; // seconds
+}
+
+/**
+ * One live Meta ad's identity + metrics — an enrichment record now, not the primary video
+ * entity (see types.ts's PublishedVideo doc comment for why: the "<Business> AI Creatives"
+ * sheet is primary, Meta is joined on afterward). Deliberately has no editorName/videoKind/
+ * isWinning here — those are sheet-driven (or computed downstream) in syncService.ts.
+ */
+export interface MetaAdRecord {
+  id: string;
+  accountId: string;
+  businessUnit: string;
+  campaignName: string;
+  adName: string;
+  createdDate: string;
+  effectiveStatus: string;
+  spend: number;
+  impressions: number;
+  ctr: number;
+  cpm: number;
+  cpc: number;
+  conversions: number | null;
+  cpa: number | null;
+  durationSeconds: number | null;
+}
+
+/** A lookup index over every currently-live Meta ad, for matching sheet rows against them. */
+export interface MetaAdsIndex {
+  byAdId: Map<string, MetaAdRecord>;
+  byNormalizedTitle: Map<string, MetaAdRecord>;
+  all: MetaAdRecord[];
 }
 
 // Deliberately shallow: requesting the nested video_data/asset_feed_spec fields directly on
@@ -139,13 +163,17 @@ async function fetchVideoDurations(videoIds: string[]): Promise<Map<string, numb
 }
 
 /**
- * A published Meta ad is treated as the video itself (see PublishedVideo) —
- * "submitted" means live on Meta, not "row exists in a sheet". Ad identity
- * (name, created_time, status) comes from the /ads edge; performance numbers
- * come from a separate lifetime /insights call and are joined by ad_id.
- * Duration is two more hops: ad -> creative id -> creative's video_id -> Video node's `length`.
+ * Fetches every currently-live ad (+ its metrics) across all configured accounts and returns it
+ * as a matchable index, keyed by ad id and by normalized title. Ad identity (name, created_time,
+ * status) comes from the /ads edge; performance numbers come from a separate lifetime /insights
+ * call and are joined by ad_id. Duration is two more hops: ad -> creative id -> creative's
+ * video_id -> Video node's `length`.
+ *
+ * This is an enrichment source now, not the primary video list — see types.ts's PublishedVideo
+ * doc comment. syncService.ts iterates the "<Business> AI Creatives" sheet rows as the primary
+ * list and looks up a match in this index for each one.
  */
-export async function fetchPublishedVideos(): Promise<PublishedVideo[]> {
+export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
   if (!isMetaAdsConfigured()) {
     throw new Error(
       "Meta Ads API is not configured. Set META_ACCESS_TOKEN and META_AD_ACCOUNT_IDS in .env.local."
@@ -189,7 +217,9 @@ export async function fetchPublishedVideos(): Promise<PublishedVideo[]> {
     .filter((id): id is string => id !== null);
   const videoDurations = await fetchVideoDurations(allVideoIds);
 
-  const results: PublishedVideo[] = [];
+  const byAdId = new Map<string, MetaAdRecord>();
+  const byNormalizedTitle = new Map<string, MetaAdRecord>();
+  const all: MetaAdRecord[] = [];
 
   for (const { accountId, ads, insights } of perAccount) {
     const insightsByAdId = new Map(insights.map((i) => [i.ad_id, i]));
@@ -198,19 +228,15 @@ export async function fetchPublishedVideos(): Promise<PublishedVideo[]> {
       const insight = insightsByAdId.get(ad.id);
       const spend = Number(insight?.spend || 0);
       const conversions = extractConversions(insight?.actions);
-      const rawEditorName = parseEditorFromAdTitle(ad.name);
-      const editorName = normalizeEditorName(rawEditorName, config.editorRoster) ?? matchEditorBySegmentScan(ad.name, config.editorRoster);
       const creative = ad.creative?.id ? creativesById.get(ad.creative.id) : undefined;
       const videoId = creative ? extractVideoIdFromCreative(creative) : null;
 
-      results.push({
+      const record: MetaAdRecord = {
         id: ad.id,
         accountId,
         businessUnit: config.metaAds.accountLabels[accountId] ?? accountId,
         campaignName: ad.campaign?.name ?? "",
         adName: ad.name,
-        editorName,
-        videoKind: parseVideoKindFromAdTitle(ad.name) ?? matchVideoKindByCutMention(ad.name),
         createdDate: config.createdDateOverrides[ad.id] ?? normalizeToIsoDate(ad.created_time),
         effectiveStatus: ad.effective_status,
         spend,
@@ -221,11 +247,13 @@ export async function fetchPublishedVideos(): Promise<PublishedVideo[]> {
         conversions,
         cpa: conversions && conversions > 0 ? spend / conversions : null,
         durationSeconds: videoId ? videoDurations.get(videoId) ?? null : null,
-        isWinning: false,
-        winningSource: null,
-      });
+      };
+
+      byAdId.set(record.id, record);
+      byNormalizedTitle.set(normalizeTitleForMatching(record.adName), record);
+      all.push(record);
     }
   }
 
-  return results;
+  return { byAdId, byNormalizedTitle, all };
 }

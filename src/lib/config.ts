@@ -62,19 +62,6 @@ function parseEditorRoster(value: string | undefined): EditorRosterEntry[] {
   });
 }
 
-// Explicit, user-confirmed exceptions where a sheet row's title genuinely doesn't match the
-// live Meta ad (a real typo/rename in the sheet, not just a pod-code addition) — too risky to
-// auto-match by title, so these map the exact Meta Ad ID straight to its Drive folder instead.
-// Format: "metaAdId|driveLink,metaAdId2|driveLink2".
-function parseManualDriveLinkOverrides(value: string | undefined): Record<string, string> {
-  const map: Record<string, string> = {};
-  for (const entry of csv(value)) {
-    const [adId, driveLink] = entry.split("|").map((s) => s.trim());
-    if (adId && driveLink) map[adId] = driveLink;
-  }
-  return map;
-}
-
 // User policy: an ad only counts toward a given month if it was BOTH scripted AND published live
 // in that month. Confirmed real case: a batch of ads scripted in June went live on Meta in the
 // first few hours of July 1 IST — genuinely June-origin work (each concept is logged in the
@@ -155,27 +142,37 @@ export const config = {
   // Canonical editor names (+ aliases), once supplied, used to normalize whatever's parsed out
   // of ad titles or read from the Progress Tracker sheet's Editor column.
   editorRoster: parseEditorRoster(process.env.EDITOR_ROSTER),
-  // Sidesteps the Meta permission wall on video duration entirely: these sheets already link
-  // each ad to a Google Drive folder containing the source video file. One sheet per business
-  // unit ("Lumus AI Creatives", "Astrotalk AI Creatives", "Astrotalk Store AI Creatives") —
-  // joined by title (see normalizeTitleForMatching), since the ad id logged in the sheet is
-  // usually a different campaign's duplicate of the same underlying video, not the exact id
-  // this dashboard tracks.
+  // The primary source of "what videos exist" — one sheet per business unit ("Lumus AI
+  // Creatives", "Astrotalk AI Creatives", "Astrotalk Store AI Creatives"). Every logged row
+  // counts as a video regardless of Meta status; Meta is joined on afterward (by the row's own
+  // Meta Ad ID first, then by title — see normalizeTitleForMatching — since the ad id logged in
+  // the sheet is often a different campaign's duplicate of the same underlying video, not the
+  // exact id this dashboard tracks) purely to enrich with live metrics when available.
   driveCreativeSheets: [
     {
       sheetId: process.env.DRIVE_CREATIVE_SHEET_ID ?? "",
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS) : ["July 2026"],
+      businessUnit: "Lumus",
     },
     {
       sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_2 ?? "",
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_2).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_2) : ["July 2026"],
+      businessUnit: "Astrotalk",
     },
     {
       sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_3 ?? "",
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_3).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_3) : ["July 2026"],
+      businessUnit: "Astrotalk Store",
+    },
+    // A second, separate spreadsheet for the same business unit — Astrotalk Store splits its
+    // creatives across two sheets ("india"/"native" tabs) rather than one. Multiple sheets can
+    // share a businessUnit fine; fetchDriveCreativeRows just reads every configured sheet.
+    {
+      sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_4 ?? "",
+      tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_4).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_4) : ["india", "native"],
+      businessUnit: "Astrotalk Store",
     },
   ].filter((s) => s.sheetId),
-  manualDriveLinkOverrides: parseManualDriveLinkOverrides(process.env.DRIVE_LINK_MANUAL_OVERRIDES),
   createdDateOverrides: parseCreatedDateOverrides(process.env.CREATED_DATE_MANUAL_OVERRIDES),
   googleDrive: {
     // Needed to read video duration from the Drive folders referenced above — a plain Sheets

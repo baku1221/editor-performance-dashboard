@@ -1,10 +1,11 @@
 import { format, isValid, parse } from "date-fns";
 
-// The real sheets use day-first slash dates ("25/05/2026", "1/07/26") — JS's
-// generic `new Date(...)` parses ambiguous slash dates as US month-first and
-// silently gets the wrong date (or Invalid Date for day > 12), so day-first
-// formats are tried explicitly before falling back to the generic parser.
-const SLASH_DATE_FORMATS = ["d/M/yyyy", "d/M/yy"];
+// The real sheets use day-first delimited dates — most with slashes ("25/05/2026", "1/07/26"),
+// at least one ("Astrotalk AI Creatives") with dashes instead ("01-07-26") — JS's generic
+// `new Date(...)` parses ambiguous delimited dates as US month-first and silently gets the
+// wrong date (or Invalid Date for day > 12), so day-first formats are tried explicitly before
+// falling back to the generic parser.
+const DELIMITED_DATE_FORMATS = ["d/M/yyyy", "d/M/yy", "d-M-yyyy", "d-M-yy"];
 
 /**
  * Google Sheets date cells can come through as "2026-07-08", "25/05/2026",
@@ -26,8 +27,8 @@ export function normalizeToIsoDate(raw: string): string {
   // the date in the ad account's own timezone; slicing sidesteps environment-dependent re-rendering.
   if (/^\d{4}-\d{2}-\d{2}/.test(trimmed)) return trimmed.slice(0, 10);
 
-  if (trimmed.includes("/")) {
-    for (const pattern of SLASH_DATE_FORMATS) {
+  if (trimmed.includes("/") || trimmed.includes("-")) {
+    for (const pattern of DELIMITED_DATE_FORMATS) {
       const parsed = parse(trimmed, pattern, new Date());
       if (!isValid(parsed)) continue;
 

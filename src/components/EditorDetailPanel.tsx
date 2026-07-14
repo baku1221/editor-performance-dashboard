@@ -117,8 +117,10 @@ export function EditorDetailPanel({
                       <th className="px-3 py-2.5 font-medium">Business Unit</th>
                       <th className="px-3 py-2.5 font-medium">Campaign</th>
                       <th className="px-3 py-2.5 font-medium">Type</th>
-                      <th className="px-3 py-2.5 font-medium">Published</th>
+                      <th className="px-3 py-2.5 font-medium">Created Date</th>
+                      <th className="px-3 py-2.5 font-medium">Published Date</th>
                       <th className="px-3 py-2.5 font-medium">Duration (s)</th>
+                      <th className="px-3 py-2.5 font-medium">Taken Live</th>
                       <th className="px-3 py-2.5 font-medium">{showSpendInsteadOfCpi ? "Spend" : "CPI"}</th>
                       <th className="px-3 py-2.5 font-medium">Status</th>
                       <th className="px-3 py-2.5 font-medium">Winning</th>
@@ -127,7 +129,7 @@ export function EditorDetailPanel({
                   <tbody>
                     {visibleVideos.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-3 py-6 text-center text-app-dim">
+                        <td colSpan={11} className="px-3 py-6 text-center text-app-dim">
                           No Main-version ads in the selected period — try "Include cuts".
                         </td>
                       </tr>
@@ -166,14 +168,24 @@ export function EditorDetailPanel({
                             {video.videoKind ?? "—"}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 text-app-muted">{video.createdDate}</td>
+                        <td className="px-3 py-2.5 text-app-muted">{video.sheetCreatedDate || "—"}</td>
+                        <td className="px-3 py-2.5 text-app-muted">{video.publishedDate || "—"}</td>
                         <td className="px-3 py-2.5 text-app-muted">{video.durationSeconds ?? "—"}</td>
+                        <td className="px-3 py-2.5">
+                          {video.takenLive ? (
+                            <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">Yes</span>
+                          ) : (
+                            <span className="rounded-full bg-app-border px-2 py-0.5 text-xs font-medium text-app-muted">Not yet</span>
+                          )}
+                        </td>
                         <td className="px-3 py-2.5 text-app-muted">
-                          {showSpendInsteadOfCpi
-                            ? video.spend.toFixed(2)
-                            : video.cpa !== null
-                              ? video.cpa.toFixed(2)
-                              : "—"}
+                          {!video.takenLive
+                            ? "—"
+                            : showSpendInsteadOfCpi
+                              ? video.spend.toFixed(2)
+                              : video.cpa !== null
+                                ? video.cpa.toFixed(2)
+                                : "—"}
                         </td>
                         <td className="px-3 py-2.5 text-app-muted">{video.effectiveStatus}</td>
                         <td className="px-3 py-2.5">
