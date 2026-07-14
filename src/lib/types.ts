@@ -24,21 +24,28 @@ export interface ProgressItem {
 }
 
 /**
- * A published Meta ad IS the video: editors' work only counts once it's live
- * on Meta, so there's no separate "completed video" entity to reconcile
- * against a manually-updated sheet. Editor attribution comes directly from
- * parsing the ad title (see services/editorTitleParser.ts).
+ * The "<Business> AI Creatives" sheet row IS the video, now — every logged row counts as a
+ * video regardless of whether it's live on Meta yet (editors' work should be visible as soon as
+ * it's scripted/edited, not just once published). Meta is an enrichment source layered on top:
+ * when a row can be matched to a live ad, takenLive is true and the metric fields carry Meta's
+ * real numbers; when it can't (not published yet, or genuinely absent from the sheet), takenLive
+ * is false and the metric fields sit at their empty defaults. Editor attribution comes from the
+ * sheet's own Editor column when present, falling back to parsing the ad-title naming convention
+ * (see services/editorTitleParser.ts) for sheets that don't have an Editor column at all.
  */
 export interface PublishedVideo {
-  id: string; // Meta ad id
-  accountId: string;
-  businessUnit: string; // human label for accountId, e.g. "Lumus" | "Astrotalk" — see config.metaAds.accountLabels
+  id: string; // Meta ad id when takenLive, else a stable id derived from the sheet row
+  accountId: string | null; // Meta ad account id — null when not takenLive
+  businessUnit: string; // human label, e.g. "Lumus" | "Astrotalk" | "Astrotalk Store"
   campaignName: string;
   adName: string;
-  editorName: string | null; // null = title didn't match the naming convention
+  editorName: string | null; // null = neither the sheet's Editor column nor title parsing matched the roster
   videoKind: "Main" | "Cut" | null; // from the ad title's middle segment; null = title didn't have one
-  createdDate: string; // ISO date, from the ad's created_time
-  effectiveStatus: string; // Meta's effective_status, e.g. ACTIVE / PAUSED / ARCHIVED
+  createdDate: string; // ISO date used for date-range filtering/aggregation — Meta's created_time when takenLive (month-boundary corrected), else sheetCreatedDate
+  sheetCreatedDate: string; // ISO date the row was logged/made per the "<Business> AI Creatives" sheet itself — always best-effort populated when available, regardless of takenLive
+  publishedDate: string | null; // ISO date Meta reports as this ad's created_time — only set once takenLive is true, uncorrected (the raw Meta value, not the month-boundary-adjusted createdDate)
+  effectiveStatus: string; // Meta's effective_status when takenLive, else "Not Live"
+  takenLive: boolean; // true once this sheet row is matched to an actual ad currently live on Meta
   spend: number;
   impressions: number;
   ctr: number;
@@ -46,7 +53,7 @@ export interface PublishedVideo {
   cpc: number;
   conversions: number | null;
   cpa: number | null; // spend / conversions, using META_CONVERSION_ACTION_TYPES
-  durationSeconds: number | null; // from the ad creative's attached video; null if not a single-video creative
+  durationSeconds: number | null; // from the sheet row's own Drive link; independent of takenLive
   isWinning: boolean;
   winningSource: "rule" | "manual" | null;
 }
