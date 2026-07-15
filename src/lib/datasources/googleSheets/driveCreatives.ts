@@ -37,7 +37,10 @@ function parseTabMonth(tabName: string): string {
 }
 
 const HEADER_ALIASES = {
-  name: ["name"],
+  // "content" is the Social Media sheet's own header for this column ("Content", not "Name") —
+  // added as an alias rather than a positional fallback since it's a real, reliably-present label
+  // there, not a blank/corrupted header like the other sheets' quirks below.
+  name: ["name", "content"],
   editorName: ["editor"],
   link: ["link"],
   metaAdId: ["metaadid"],
@@ -85,6 +88,20 @@ function buildColumnLocator(headers: string[]): Partial<Record<Field, number>> {
   // fallback unconditionally would misread that real column as a date.
   if (locator.dateMade === undefined && locator.category !== undefined && !normalized[locator.category + 1]) {
     locator.dateMade = locator.category + 1;
+  }
+
+  // The Social Media sheet puts its blank-header date column on the OTHER side of Link — a
+  // "Content, Editor, Status, [blank date], Drive Link" layout, date immediately before the link
+  // column rather than after. Confirmed 100% populated. Checked BEFORE the link+1 fallback below
+  // — confirmed real bug otherwise: this sheet also has a genuinely blank, unused leftover column
+  // right after Link (a repeated-block template artifact with no data in it at all), so link+1's
+  // blank-header check would misfire and claim that empty column as the date instead, the same
+  // "wrong blank column wins" failure mode as the Lumus "Live date" bug. Safe to check first:
+  // on every other configured sheet, the column before Link is either a real non-blank header
+  // (Lumus's "Category", Astrotalk Store's "Category") or coincides with the Astrotalk sheet's
+  // own category+1 slot (already claimed above), so this can't misfire elsewhere.
+  if (locator.dateMade === undefined && locator.link !== undefined && locator.link > 0 && !normalized[locator.link - 1]) {
+    locator.dateMade = locator.link - 1;
   }
 
   // Same story one column over on the Lumus sheet — genuine per-row dates ("1/7/2026" etc.,
@@ -155,6 +172,12 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
         for (const row of dataRows) {
           const name = cellAt(row, locator.name);
           if (!name) continue; // nothing to identify this as a video at all
+          // "Carousel" rows (Social Media sheet) are Canva image posts, not videos — confirmed
+          // every single one is literally named "Carousel" with a canva.link Drive Link, a
+          // perfectly reliable 1:1 signal across the whole sheet. Excluded globally rather than
+          // scoped to one business unit since no OTHER sheet's real video titles would ever
+          // collide with this literal name.
+          if (name.toLowerCase() === "carousel") continue;
 
           rows.push({
             metaAdId: cellAt(row, locator.metaAdId),

@@ -4,7 +4,7 @@ import { config, type EditorRosterEntry } from "../config";
 import { fetchProgressTracker } from "../datasources/googleSheets/progressTracker";
 import { fetchDriveCreativeRows, normalizeTitleForMatching, type DriveCreativeRow } from "../datasources/googleSheets/driveCreatives";
 import { fetchMetaAdsIndex, type MetaAdRecord, type MetaAdsIndex } from "../datasources/metaAds/videos";
-import { fetchDurationsForDriveLinks, isGoogleDriveConfigured } from "../datasources/googleDrive/client";
+import { fetchVideoFilesForDriveLinks, isGoogleDriveConfigured, type DriveVideoFile } from "../datasources/googleDrive/client";
 import {
   parseEditorFromAdTitle,
   parseVideoKindFromAdTitle,
@@ -28,6 +28,42 @@ function isSubsetEitherWay(a: Set<string>, b: Set<string>): boolean {
     if (!big.has(word)) return false;
   }
   return true;
+}
+
+/**
+ * Pulls a version number out of a title/filename, e.g. "3 Messages V1" -> 1, "psychic rey 3V
+ * rough cut 1.mp4" -> 1 (via "cut 1", checked first since "V1"-style tokens aren't always
+ * present or consistent in real filenames), "Psychic Rey 3 Readings V2 Rough.mp4" -> 2.
+ */
+function extractVersionNumber(text: string): number | null {
+  const cutMatch = text.match(/cut\s*(\d+)/i);
+  if (cutMatch?.[1]) return Number(cutMatch[1]);
+  const vMatch = text.match(/\bv\.?\s*(\d+)\b/i);
+  if (vMatch?.[1]) return Number(vMatch[1]);
+  return null;
+}
+
+/**
+ * A Drive folder is sometimes shared across several sheet rows for the same concept — confirmed
+ * real case: "3 Messages V1/V2/V3" all point at one folder containing three separate video
+ * files, one per variation. Picking the first file found (the old behavior) silently gave every
+ * row in that folder the SAME duration. When a folder has more than one video file, matches by
+ * comparing each row's own version number (from its title) against each file's version number
+ * (from its filename) — only trusted when exactly one file matches, otherwise falls back to the
+ * first file found (no worse than the old behavior, and folders with a single video are
+ * unaffected either way).
+ */
+function pickDurationForRow(rowName: string, files: DriveVideoFile[]): number | null {
+  if (files.length === 0) return null;
+  if (files.length === 1) return files[0]?.durationSeconds ?? null;
+
+  const rowVersion = extractVersionNumber(rowName);
+  if (rowVersion !== null) {
+    const matches = files.filter((f) => extractVersionNumber(f.name) === rowVersion);
+    if (matches.length === 1) return matches[0]?.durationSeconds ?? null;
+  }
+
+  return files[0]?.durationSeconds ?? null;
 }
 
 /** The first "|"-delimited segment — the concept/hookline name, before the "V# - Stage" and editor/pod/talent segments. */
@@ -143,7 +179,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
   const rows = dedupeRows(rawRows);
 
   const allLinks = new Set(rows.map((row) => row.driveLink).filter(Boolean));
-  const durationsByLink = isGoogleDriveConfigured() ? await fetchDurationsForDriveLinks(Array.from(allLinks)) : new Map<string, number>();
+  const filesByLink = isGoogleDriveConfigured() ? await fetchVideoFilesForDriveLinks(Array.from(allLinks)) : new Map<string, DriveVideoFile[]>();
 
   const claimedAdIds = new Set<string>();
 
@@ -153,7 +189,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
     const rawEditorName = row.editorName || parseEditorFromAdTitle(row.name);
     const editorName = normalizeEditorName(rawEditorName, roster) ?? matchEditorBySegmentScan(row.name, roster);
     const videoKind = parseVideoKindFromAdTitle(row.name) ?? matchVideoKindByCutMention(row.name);
-    const durationSeconds = row.driveLink ? durationsByLink.get(row.driveLink) ?? null : null;
+    const durationSeconds = row.driveLink ? pickDurationForRow(row.name, filesByLink.get(row.driveLink) ?? []) : null;
     const sheetCreatedDate = row.dateMade || (row.sourceMonth ? `${row.sourceMonth}-01` : "");
 
     if (matched) {

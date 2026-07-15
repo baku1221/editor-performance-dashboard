@@ -172,6 +172,15 @@ export const config = {
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_4).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_4) : ["india", "native"],
       businessUnit: "Astrotalk Store",
     },
+    // Organic social media content (not Meta ads) — same sheet-primary model regardless; Meta
+    // enrichment simply never matches anything here since there's no ad account for it, so every
+    // row stays "not live" with its own sheet date. Carousel (Canva image) rows are filtered out
+    // in fetchDriveCreativeRows, not here — only videos count.
+    {
+      sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_5 ?? "",
+      tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_5).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_5) : ["July 2026"],
+      businessUnit: "Social Media",
+    },
   ].filter((s) => s.sheetId),
   createdDateOverrides: parseCreatedDateOverrides(process.env.CREATED_DATE_MANUAL_OVERRIDES),
   googleDrive: {
@@ -194,6 +203,17 @@ export const config = {
   autoSync: {
     enabled: (process.env.AUTO_SYNC_ENABLED ?? "true") !== "false",
     intervalHours: Number(process.env.AUTO_SYNC_INTERVAL_HOURS ?? 12),
+  },
+  // Daily Slack leaderboard (services/scheduler.ts + services/slackNotifier.ts) — a text-only
+  // message posted by the server itself, no public URL needed. Disabled (no-op) whenever
+  // SLACK_WEBHOOK_URL is unset; the time/timezone fields have sane defaults.
+  slack: {
+    webhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
+    // 24h "HH:MM", checked against leaderboardTimezone's current time — not a fixed UTC hour,
+    // since the whole point is lining up with the team's actual workday regardless of which
+    // timezone the server process happens to run in.
+    leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "19:00",
+    leaderboardTimezone: process.env.SLACK_LEADERBOARD_TIMEZONE ?? "Asia/Kolkata",
   },
 };
 

@@ -57,11 +57,6 @@ export function DashboardShell() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border border-app-border bg-app-card px-3 py-2 text-xs text-app-muted">
-        <span aria-hidden>ℹ️</span>
-        <span>This data reflects only ads that were actually taken live on Meta — not scripts or work still in progress.</span>
-      </div>
-
       <FiltersBar filters={filters} onChange={setFilters} />
 
       <div className="flex gap-1 border-b border-app-border">

@@ -15,6 +15,11 @@ interface Store {
   progress: ProgressItem[];
   manualWinningOverrides: Map<string, boolean>;
   syncStatus: SyncStatus;
+  // Last IST calendar date ("yyyy-MM-dd") the daily Slack leaderboard was sent, so the scheduler
+  // sends at most once per day even though it checks every 5 minutes. In-memory (not
+  // file-persisted like editorRosterRepository) — worst case on a same-day redeploy is one
+  // duplicate or one skipped send, low-stakes compared to editor roster data.
+  slackLeaderboardLastSentDate: string | null;
 }
 
 function createEmptyStore(): Store {
@@ -29,6 +34,7 @@ function createEmptyStore(): Store {
         metaAds: { ok: false, fetchedAt: null },
       },
     },
+    slackLeaderboardLastSentDate: null,
   };
 }
 
