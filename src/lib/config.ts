@@ -195,6 +195,24 @@ export const config = {
     enabled: (process.env.AUTO_SYNC_ENABLED ?? "true") !== "false",
     intervalHours: Number(process.env.AUTO_SYNC_INTERVAL_HOURS ?? 12),
   },
+  // Daily Slack leaderboard (services/scheduler.ts + services/slackNotifier.ts). Disabled
+  // (no-op) whenever SLACK_WEBHOOK_URL is unset — every other field has a sane default so this
+  // only needs the webhook URL + the app's own public URL to start working.
+  slack: {
+    webhookUrl: process.env.SLACK_WEBHOOK_URL ?? "",
+    // 24h "HH:MM", checked against leaderboardTimezone's current time — not a fixed UTC hour,
+    // since the whole point is lining up with the team's actual workday regardless of which
+    // timezone the server process happens to run in.
+    leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "19:00",
+    leaderboardTimezone: process.env.SLACK_LEADERBOARD_TIMEZONE ?? "Asia/Kolkata",
+    // Slack's `image` block fetches this URL itself (server-side, no cookies) — gated by this
+    // shared-secret token instead of the Google sign-in every other route requires, since Slack
+    // can't complete an OAuth flow. Keep this random and out of source control.
+    leaderboardImageSecret: process.env.LEADERBOARD_IMAGE_SECRET ?? "",
+    // The deployed app's own reachable URL, so Slack can fetch the leaderboard image — reuses
+    // NEXTAUTH_URL since that's already set to exactly this for the auth callback to work.
+    publicBaseUrl: process.env.NEXTAUTH_URL ?? "",
+  },
 };
 
 export function isMetaAdsConfigured(): boolean {
