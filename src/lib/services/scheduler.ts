@@ -41,6 +41,11 @@ async function checkAndSync(): Promise<void> {
  * config.slack.leaderboardTime — checked on the same 5-minute tick as checkAndSync, so it can be
  * up to 5 minutes late but never fires twice for the same day (guarded by
  * store.slackLeaderboardLastSentDate, not a precise one-shot timer).
+ *
+ * Runs its own sync immediately before sending — the periodic 12-hour auto-sync could have last
+ * run many hours before the leaderboard time, so relying on it alone risks posting a stale
+ * snapshot of the day's work. runSync() is resilient to its own internal failures (per-source
+ * try/catch, never throws), so this is safe to call unconditionally.
  */
 async function checkAndSendSlackLeaderboard(): Promise<void> {
   if (!config.slack.webhookUrl) return;
@@ -50,11 +55,12 @@ async function checkAndSendSlackLeaderboard(): Promise<void> {
   if (store.slackLeaderboardLastSentDate === date) return;
 
   try {
+    await runSync();
     await sendDailyLeaderboardToSlack();
     store.slackLeaderboardLastSentDate = date;
-    console.log(`[scheduler] Slack leaderboard sent for ${date}`);
+    console.log(`[scheduler] Synced and sent Slack leaderboard for ${date}`);
   } catch (err) {
-    console.error("[scheduler] Slack leaderboard send failed:", err);
+    console.error("[scheduler] Slack sync+send failed:", err);
   }
 }
 

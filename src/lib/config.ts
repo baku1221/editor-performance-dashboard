@@ -212,7 +212,7 @@ export const config = {
     // 24h "HH:MM", checked against leaderboardTimezone's current time — not a fixed UTC hour,
     // since the whole point is lining up with the team's actual workday regardless of which
     // timezone the server process happens to run in.
-    leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "19:00",
+    leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "23:45",
     leaderboardTimezone: process.env.SLACK_LEADERBOARD_TIMEZONE ?? "Asia/Kolkata",
   },
 };
