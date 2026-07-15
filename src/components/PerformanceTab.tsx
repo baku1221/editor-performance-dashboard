@@ -13,7 +13,7 @@ import { EditorDetailPanel } from "./EditorDetailPanel";
 const ALL_UNIT = "All";
 
 // Preferred display order for the known business units; anything else falls back to alphabetical.
-const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk Store"];
+const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk Store", "Social Media"];
 
 function sortBusinessUnits(units: string[]): string[] {
   return [...units].sort((a, b) => {
@@ -56,6 +56,13 @@ const UNIT_THEME: Record<string, { tab: string; panel: string; header: string; a
     header: "bg-teal-950/50 border-teal-800/50 text-teal-300",
     accentText: "text-teal-300",
     rowHover: "hover:bg-teal-500/10",
+  },
+  "Social Media": {
+    tab: "bg-pink-400 text-gray-900",
+    panel: "border-pink-800/50 bg-pink-950/20",
+    header: "bg-pink-950/50 border-pink-800/50 text-pink-300",
+    accentText: "text-pink-300",
+    rowHover: "hover:bg-pink-500/10",
   },
 };
 
