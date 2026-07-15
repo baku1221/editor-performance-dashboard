@@ -12,11 +12,10 @@ export default withAuth({
 
 export const config = {
   // Excludes: NextAuth's own routes (would otherwise be a redirect loop), the sign-in page
-  // itself, Next.js static assets, and the Slack leaderboard image — Slack's servers fetch that
-  // one directly to render the daily message and can't complete a Google OAuth flow, so it's
-  // protected by a shared-secret token in the URL instead (see leaderboard-image/route.tsx).
-  // Everything else — including /api/sync, since the in-process auto-sync scheduler calls
-  // runSync() directly rather than over HTTP and is therefore unaffected by this middleware —
-  // requires a session.
-  matcher: ["/((?!api/auth|auth/signin|api/slack/leaderboard-image|_next/static|_next/image|favicon.ico).*)"],
+  // itself, and Next.js static assets. Everything else — including /api/sync, since the
+  // in-process auto-sync scheduler calls runSync() directly rather than over HTTP and is
+  // therefore unaffected by this middleware — requires a session. The daily Slack leaderboard
+  // (services/slackNotifier.ts) is sent server-side by the in-process scheduler, not fetched by
+  // Slack over HTTP, so it needs no exclusion here either.
+  matcher: ["/((?!api/auth|auth/signin|_next/static|_next/image|favicon.ico).*)"],
 };
