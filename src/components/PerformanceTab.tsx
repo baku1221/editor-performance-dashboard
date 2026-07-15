@@ -6,6 +6,7 @@ import clsx from "clsx";
 import { jsonFetcher } from "@/lib/swrFetcher";
 import { buildQueryString, type UiFilters } from "@/lib/clientFilters";
 import type { EditorPerformanceRow, PerformanceData, PerformanceSummary } from "@/lib/types";
+import { computeMveScores } from "@/lib/services/mveScoreService";
 import { SummaryCard } from "./SummaryCard";
 import { EditorDetailPanel } from "./EditorDetailPanel";
 
@@ -62,12 +63,23 @@ function themeFor(unit: string) {
   return UNIT_THEME[unit] ?? (UNIT_THEME[ALL_UNIT] as (typeof UNIT_THEME)[typeof ALL_UNIT]);
 }
 
-type SortKey = "videosSubmitted" | "mainAdsCount" | "winningCreatives" | "winningPercent" | "activeCreatives" | "totalDurationSeconds";
+type ScoredRow = EditorPerformanceRow & { mveScore: number | null };
+
+type SortKey =
+  | "videosSubmitted"
+  | "mainAdsCount"
+  | "winningCreatives"
+  | "winningPercent"
+  | "activeCreatives"
+  | "totalDurationSeconds"
+  | "mveScore";
 type SortDir = "asc" | "desc";
 
-function sortRows(rows: EditorPerformanceRow[], sortKey: SortKey | null, sortDir: SortDir): EditorPerformanceRow[] {
+// mveScore is null for "Unmapped" — treated as lowest-possible so it sorts to the bottom
+// regardless of direction, rather than colliding with real 0-scored editors.
+function sortRows(rows: ScoredRow[], sortKey: SortKey | null, sortDir: SortDir): ScoredRow[] {
   if (!sortKey) return rows;
-  const sorted = [...rows].sort((a, b) => a[sortKey] - b[sortKey]);
+  const sorted = [...rows].sort((a, b) => (a[sortKey] ?? -1) - (b[sortKey] ?? -1));
   return sortDir === "desc" ? sorted.reverse() : sorted;
 }
 
@@ -166,8 +178,13 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
       ? combineRowsByEditor(data?.rows ?? [])
       : data?.rows.filter((r) => r.businessUnit === activeUnit) ?? [];
 
-  const editorOptions = Array.from(new Set(unitRows.map((r) => r.editorName))).sort((a, b) => a.localeCompare(b));
-  const filteredRows = editorFilter ? unitRows.filter((r) => r.editorName === editorFilter) : unitRows;
+  // Normalized against whichever cohort is currently active — switching business-unit tabs
+  // naturally recomputes each editor's MVE Score relative to just their peers in that unit (or
+  // everyone, on the "All" tab), since unitRows is already scoped that way above.
+  const scoredRows = computeMveScores(unitRows);
+
+  const editorOptions = Array.from(new Set(scoredRows.map((r) => r.editorName))).sort((a, b) => a.localeCompare(b));
+  const filteredRows = editorFilter ? scoredRows.filter((r) => r.editorName === editorFilter) : scoredRows;
   const rows = sortRows(filteredRows, sortKey, sortDir);
   const dateRange = data?.businessUnits[0]?.summary.dateRange ?? null; // same configured window for every unit
   const summary = deriveSummaryFromRows(rows, dateRange);
@@ -282,19 +299,27 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
                   accentText={theme.accentText}
                   onSort={handleSort}
                 />
+                <SortableHeader
+                  label="MVE Score"
+                  sortKey="mveScore"
+                  active={sortKey === "mveScore"}
+                  dir={sortDir}
+                  accentText={theme.accentText}
+                  onSort={handleSort}
+                />
               </tr>
             </thead>
             <tbody>
               {isLoading && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-app-dim">
+                  <td colSpan={8} className="px-4 py-6 text-center text-app-dim">
                     Loading…
                   </td>
                 </tr>
               )}
               {!isLoading && rows.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-6 text-center text-app-dim">
+                  <td colSpan={8} className="px-4 py-6 text-center text-app-dim">
                     No data for the selected filters.
                   </td>
                 </tr>
@@ -312,6 +337,7 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
                   <td className="px-4 py-3 text-app-muted">{row.winningPercent}%</td>
                   <td className="px-4 py-3 text-app-muted">{row.activeCreatives}</td>
                   <td className="px-4 py-3 text-app-muted">{row.totalDurationSeconds.toLocaleString()}</td>
+                  <td className="px-4 py-3 font-medium text-app-text">{row.mveScore ?? "—"}</td>
                 </tr>
               ))}
             </tbody>
