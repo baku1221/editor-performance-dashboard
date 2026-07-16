@@ -179,13 +179,16 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
           // scoped to one business unit since no OTHER sheet's real video titles would ever
           // collide with this literal name.
           if (name.toLowerCase() === "carousel") continue;
-          // Static-image rows (Astrotalk India sheet: "Static"/"AI Static" alongside "AI Video"/
-          // "video") aren't videos either — this dashboard tracks video editor output, not static
-          // creatives. Excluded globally the same way: confirmed the original Astrotalk sheet also
-          // has a "Type" column, but every single row there is "AI Video" (no Static rows at all),
-          // so this can't drop anything there.
+          // Static-image rows ("Static"/"AI Static" alongside "AI Video"/"video" in the Type
+          // column) are excluded by default — this dashboard otherwise tracks video editor
+          // output, not static creatives. Astrotalk India is the explicit exception: the team
+          // wants static output counted there too (it's a large share of that account's real
+          // work), so this only drops static rows for every OTHER sheet. Confirmed safe
+          // elsewhere: the original Astrotalk sheet also has a Type column, but every single row
+          // there is already "AI Video" (no Static rows at all), so this can't drop anything
+          // there regardless.
           const type = cellAt(row, locator.type).toLowerCase();
-          if (type.includes("static")) continue;
+          if (type.includes("static") && sheet.businessUnit !== "Astrotalk India") continue;
 
           rows.push({
             metaAdId: cellAt(row, locator.metaAdId),
