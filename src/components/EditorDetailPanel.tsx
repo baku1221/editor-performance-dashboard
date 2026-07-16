@@ -12,6 +12,7 @@ const UNIT_ACCENT: Record<string, string> = {
   Astrotalk: "border-yellow-800/50 bg-yellow-950/40",
   "Astrotalk Store": "border-teal-800/50 bg-teal-950/40",
   "Social Media": "border-pink-800/50 bg-pink-950/40",
+  "Astrotalk India": "border-orange-800/50 bg-orange-950/40",
 };
 
 // Same colors as UNIT_ACCENT, just compact enough for an inline table badge — most useful in the
@@ -21,6 +22,7 @@ const UNIT_BADGE: Record<string, string> = {
   Astrotalk: "bg-yellow-500/15 text-yellow-300",
   "Astrotalk Store": "bg-teal-500/15 text-teal-300",
   "Social Media": "bg-pink-500/15 text-pink-300",
+  "Astrotalk India": "bg-orange-500/15 text-orange-300",
 };
 
 export function EditorDetailPanel({

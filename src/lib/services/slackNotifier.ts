@@ -6,7 +6,11 @@ function formatList(entries: LeaderboardEntry[]): string {
   return entries.map((e, i) => `${i + 1}. *${e.editorName}* — ${e.mainAdsCount} ads`).join("\n");
 }
 
-/** Posts the daily leaderboard to Slack via an Incoming Webhook — plain text, no image. */
+/**
+ * Posts the daily leaderboard to Slack via an Incoming Webhook — plain text, no image. "Today"
+ * lists every editor who made a Main ad today (not a top-N cutoff — a full daily roll call), and
+ * "This Month" stays a top-5 ranking.
+ */
 export async function sendDailyLeaderboardToSlack(): Promise<void> {
   if (!config.slack.webhookUrl) {
     throw new Error("SLACK_WEBHOOK_URL is not set — nothing to send to.");
@@ -20,9 +24,9 @@ export async function sendDailyLeaderboardToSlack(): Promise<void> {
     body: JSON.stringify({
       blocks: [
         { type: "header", text: { type: "plain_text", text: "🏆 Editor Leaderboard" } },
-        { type: "section", text: { type: "mrkdwn", text: `*Today — ${date}*\n${formatList(today)}` } },
+        { type: "section", text: { type: "mrkdwn", text: `*Today's Videos — ${date}*\n${formatList(today)}` } },
         { type: "divider" },
-        { type: "section", text: { type: "mrkdwn", text: `*This Month (till ${date})*\n${formatList(month)}` } },
+        { type: "section", text: { type: "mrkdwn", text: `*Top 5 This Month (till ${date})*\n${formatList(month)}` } },
       ],
     }),
   });

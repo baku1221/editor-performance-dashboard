@@ -53,6 +53,7 @@ const HEADER_ALIASES = {
   // that genuinely labels this column that way.
   dateMade: ["uploaddates"],
   category: ["category"],
+  type: ["type"],
 } as const;
 
 type Field = keyof typeof HEADER_ALIASES;
@@ -178,6 +179,13 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
           // scoped to one business unit since no OTHER sheet's real video titles would ever
           // collide with this literal name.
           if (name.toLowerCase() === "carousel") continue;
+          // Static-image rows (Astrotalk India sheet: "Static"/"AI Static" alongside "AI Video"/
+          // "video") aren't videos either — this dashboard tracks video editor output, not static
+          // creatives. Excluded globally the same way: confirmed the original Astrotalk sheet also
+          // has a "Type" column, but every single row there is "AI Video" (no Static rows at all),
+          // so this can't drop anything there.
+          const type = cellAt(row, locator.type).toLowerCase();
+          if (type.includes("static")) continue;
 
           rows.push({
             metaAdId: cellAt(row, locator.metaAdId),
