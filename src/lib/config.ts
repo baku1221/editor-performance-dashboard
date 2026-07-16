@@ -43,6 +43,7 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   act_572321625688986: "Lumus",
   act_2021416865462021: "Astrotalk",
   act_2158343221618433: "Astrotalk Store",
+  act_872869545439171: "Astrotalk India",
 };
 
 export interface EditorRosterEntry {
@@ -181,7 +182,22 @@ export const config = {
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_5).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_5) : ["July 2026"],
       businessUnit: "Social Media",
     },
+    // Separate India-specific Meta ad account (act_872869545439171, "Astrotalk 2026") — kept as
+    // its own business unit rather than folded into "Astrotalk" so it can be excluded from the
+    // combined "All" view (see excludedFromAllView below) without affecting the original
+    // Astrotalk account's numbers. Same "Static"/"AI Static" vs "AI Video" Type column as the
+    // original Astrotalk Store sheet — filtered in fetchDriveCreativeRows, not here.
+    {
+      sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_6 ?? "",
+      tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_6).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_6) : ["July 2026", "June 2026"],
+      businessUnit: "Astrotalk India",
+    },
   ].filter((s) => s.sheetId),
+  // Business units in this list still get their own selectable Performance-tab, but are left out
+  // of the "All" combined view/summary and the Slack leaderboard's cross-unit ranking — see
+  // PerformanceTab.tsx's combineRowsByEditor and leaderboardService.ts's getTopEditorsByMainAds.
+  // Astrotalk India is a separate, newer Meta ad account being tracked in isolation on purpose.
+  excludedFromAllView: csv(process.env.EXCLUDE_FROM_ALL_VIEW).length > 0 ? csv(process.env.EXCLUDE_FROM_ALL_VIEW) : ["Astrotalk India"],
   createdDateOverrides: parseCreatedDateOverrides(process.env.CREATED_DATE_MANUAL_OVERRIDES),
   googleDrive: {
     // Needed to read video duration from the Drive folders referenced above — a plain Sheets

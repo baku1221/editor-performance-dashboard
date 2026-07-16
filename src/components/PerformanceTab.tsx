@@ -13,7 +13,7 @@ import { EditorDetailPanel } from "./EditorDetailPanel";
 const ALL_UNIT = "All";
 
 // Preferred display order for the known business units; anything else falls back to alphabetical.
-const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk Store", "Social Media"];
+const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media"];
 
 function sortBusinessUnits(units: string[]): string[] {
   return [...units].sort((a, b) => {
@@ -63,6 +63,13 @@ const UNIT_THEME: Record<string, { tab: string; panel: string; header: string; a
     header: "bg-pink-950/50 border-pink-800/50 text-pink-300",
     accentText: "text-pink-300",
     rowHover: "hover:bg-pink-500/10",
+  },
+  "Astrotalk India": {
+    tab: "bg-orange-400 text-gray-900",
+    panel: "border-orange-800/50 bg-orange-950/20",
+    header: "bg-orange-950/50 border-orange-800/50 text-orange-300",
+    accentText: "text-orange-300",
+    rowHover: "hover:bg-orange-500/10",
   },
 };
 
@@ -180,9 +187,10 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
   const activeUnit = tabs.includes(businessUnit) ? businessUnit : ALL_UNIT;
   const theme = themeFor(activeUnit);
 
+  const excludedFromAllView = new Set(data?.excludedFromAllView ?? []);
   const unitRows =
     activeUnit === ALL_UNIT
-      ? combineRowsByEditor(data?.rows ?? [])
+      ? combineRowsByEditor((data?.rows ?? []).filter((r) => !excludedFromAllView.has(r.businessUnit)))
       : data?.rows.filter((r) => r.businessUnit === activeUnit) ?? [];
 
   // Normalized against whichever cohort is currently active — switching business-unit tabs

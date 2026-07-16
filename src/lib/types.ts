@@ -105,6 +105,11 @@ export interface BusinessUnitPerformance {
 export interface PerformanceData {
   businessUnits: BusinessUnitPerformance[];
   rows: EditorPerformanceRow[]; // flat across all business units; each row carries its own businessUnit
+  // Business units still selectable as their own tab, but excluded from the combined "All" view
+  // (config.excludedFromAllView) — e.g. a newer ad account being tracked in isolation. Sent to
+  // the client rather than read from server config directly, since that config module isn't
+  // meant to be imported into client components.
+  excludedFromAllView: string[];
 }
 
 export interface EditorDetail {

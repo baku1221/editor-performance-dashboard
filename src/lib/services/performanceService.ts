@@ -126,7 +126,7 @@ export async function getPerformanceData(filters: DashboardFilters): Promise<Per
     businessUnits.push({ businessUnit, summary: buildSummary(unitVideos, unitRows) });
   }
 
-  return { businessUnits, rows };
+  return { businessUnits, rows, excludedFromAllView: config.excludedFromAllView };
 }
 
 export async function getEditorDetail(
