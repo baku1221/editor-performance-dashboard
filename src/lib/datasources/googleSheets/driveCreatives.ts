@@ -140,8 +140,27 @@ function cellAt(row: string[], index: number | undefined): string {
  * ad running in a different campaign carries a different Meta Ad ID and a "– Copy" suffix —
  * this normalization is what lets those two ad records still resolve to the same Drive folder.
  */
+/**
+ * A trailing "main" in the concept segment (before the first "|") is an optional stage marker,
+ * not part of the concept itself — confirmed real case: "iski shaadi nahi ho rhi hai" (June tab,
+ * no marker) and "iski shaadi nahi ho rhi hai main" (July tab, same video re-logged a month later
+ * with an explicit "main" added, likely when the editor went back through the sheet adding
+ * clearer main/cut markers) are the same underlying video, but the added word defeated dedup's
+ * exact-text match and inflated this editor's Main count by counting it twice. Stripped only from
+ * the concept segment (not the whole title) so a genuine mid-sentence "main" elsewhere (e.g. the
+ * Hindi word for "I" in "Bhagwan ji, main itna kaam karta hoon") is left alone, and only when
+ * trailing so it can't accidentally eat a real word ending in "main". Never strips "cut"/"cuts" —
+ * those always mark a genuinely different edited file and must stay significant.
+ */
+function stripTrailingMainMarker(title: string): string {
+  const pipeIndex = title.indexOf("|");
+  const concept = pipeIndex === -1 ? title : title.slice(0, pipeIndex);
+  const rest = pipeIndex === -1 ? "" : title.slice(pipeIndex);
+  return concept.replace(/\bmain\s*$/i, "") + rest;
+}
+
 export function normalizeTitleForMatching(title: string): string {
-  const collapsed = title
+  const collapsed = stripTrailingMainMarker(title)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
