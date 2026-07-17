@@ -37,10 +37,28 @@ export async function getTopEditorsByMainAds(from: string, to: string, topN?: nu
   return topN === undefined ? ranked : ranked.slice(0, topN);
 }
 
+/**
+ * Total videos (Main + Cut, same "videosSubmitted" definition as the Performance tab) made on
+ * `date`, per business unit — unlike getTopEditorsByMainAds, this isn't restricted to Main-only
+ * or to the excludedFromAllView set, since it's reported per business unit rather than combined.
+ */
+export async function getBusinessUnitVideoTotals(date: string): Promise<Record<string, number>> {
+  const videos = await publishedVideoRepository.getAll();
+  const totals: Record<string, number> = {};
+
+  for (const v of videos) {
+    if (v.createdDate !== date) continue;
+    totals[v.businessUnit] = (totals[v.businessUnit] ?? 0) + 1;
+  }
+
+  return totals;
+}
+
 export interface DailyLeaderboards {
   date: string; // "yyyy-MM-dd", IST calendar date this snapshot represents
   today: LeaderboardEntry[]; // every editor who made a Main ad today, not just a top-N cutoff
   month: LeaderboardEntry[]; // top monthTopN by Main ads this month so far
+  businessUnitTotals: Record<string, number>; // total videos (Main + Cut) made today, per business unit
 }
 
 /** Both leaderboards the Slack message needs, computed once per send to stay consistent. */
@@ -48,10 +66,11 @@ export async function getDailyLeaderboards(monthTopN = 5): Promise<DailyLeaderbo
   const { date } = getTimezoneNow(config.slack.leaderboardTimezone);
   const monthStart = getTimezoneMonthStart(config.slack.leaderboardTimezone);
 
-  const [today, month] = await Promise.all([
+  const [today, month, businessUnitTotals] = await Promise.all([
     getTopEditorsByMainAds(date, date), // full list — everyone who made something today
     getTopEditorsByMainAds(monthStart, date, monthTopN),
+    getBusinessUnitVideoTotals(date),
   ]);
 
-  return { date, today, month };
+  return { date, today, month, businessUnitTotals };
 }
