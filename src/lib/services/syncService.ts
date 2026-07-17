@@ -71,6 +71,11 @@ function conceptSegment(title: string): string {
   return title.split("|")[0]?.trim() ?? "";
 }
 
+/** Same Main/Cut resolution used for the final PublishedVideo — factored out so matchMetaAd can compare kinds, not just words. */
+function resolveVideoKind(title: string): "Main" | "Cut" {
+  return parseVideoKindFromAdTitle(title) ?? matchVideoKindByCutMention(title);
+}
+
 /**
  * The middle "|"-delimited segment (e.g. "V1 - Main", "V2 - Cut 1"), lowercased — only present
  * (non-empty) when the title has at least 3 pipe segments, same convention as
@@ -143,7 +148,21 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
     metaIndex.byNormalizedTitle.get(normalizeTitleForMatching(row.name)) ??
     (() => {
       const rowWords = titleWordSet(row.name);
-      const matches = metaIndex.all.filter((rec) => isSubsetEitherWay(titleWordSet(rec.adName), rowWords));
+      const rowKind = resolveVideoKind(row.name);
+      // Scoped to the same business unit AND the same Main/Cut kind — confirmed real bug
+      // otherwise: on the Astrotalk Store account, a Cut's title is *exactly* its Main's title
+      // plus the word "cut"/"cuts" (e.g. "...PPP" vs "...PPP|cuts"), which makes the Main title a
+      // pure word-subset of the Cut's Meta ad title. Without the kind check, this fallback linked
+      // the Main sheet row to the CUT's live Meta ad (and vice versa risked the reverse), pulling
+      // in the wrong ad's spend/impressions/title — the row would show a "cuts"-labeled ad name
+      // while still being classified "Main" (videoKind comes from the sheet row's own title, not
+      // the matched Meta ad's).
+      const matches = metaIndex.all.filter(
+        (rec) =>
+          rec.businessUnit === row.businessUnit &&
+          resolveVideoKind(rec.adName) === rowKind &&
+          isSubsetEitherWay(titleWordSet(rec.adName), rowWords)
+      );
       const uniqueIds = new Set(matches.map((rec) => rec.id));
       return uniqueIds.size === 1 ? matches[0] : undefined;
     })() ??
@@ -188,7 +207,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
 
     const rawEditorName = row.editorName || parseEditorFromAdTitle(row.name);
     const editorName = normalizeEditorName(rawEditorName, roster) ?? matchEditorBySegmentScan(row.name, roster);
-    const videoKind = parseVideoKindFromAdTitle(row.name) ?? matchVideoKindByCutMention(row.name);
+    const videoKind = resolveVideoKind(row.name);
     const durationSeconds = row.driveLink ? pickDurationForRow(row.name, filesByLink.get(row.driveLink) ?? []) : null;
     const sheetCreatedDate = row.dateMade || (row.sourceMonth ? `${row.sourceMonth}-01` : "");
 
