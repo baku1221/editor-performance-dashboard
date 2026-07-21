@@ -11,16 +11,30 @@ export type ProgressStatus = "Not Started" | "Working" | "Review" | "Completed" 
 export interface ProgressItem {
   id: string;
   editorName: string; // "Unassigned" when the sheet's Editor cell is blank
+  scriptWriter: string; // "Script By" column; "Unassigned" when blank
   videoName: string; // Ad Name column
   currentStage: string; // raw Status text from the sheet, e.g. "In Progress"
   status: ProgressStatus; // currentStage normalized into a fixed bucket for color coding
-  startedDate: string; // ISO date, from Posted Date
+  startedDate: string; // ISO date, from Posted Date — when the script was written/given
   completedDate: string; // ISO date, from Completed Date / Date done; '' if not done yet
   cohort: string; // which sheet tab this came from, e.g. "Foreign" | "Lumus"
   // Joined against PublishedVideo (by editor + concept-title match) once the sheet's "Completed"
-  // video is actually live on Meta — there's often a lag, so both are null until it is.
+  // video is actually live on Meta — there's often a lag, so all three are null until it is.
   matchedIsWinning: boolean | null;
   matchedDurationSeconds: number | null;
+  matchedTakenLive: boolean | null;
+}
+
+export interface ScriptWriterRow {
+  scriptWriter: string;
+  scriptsGiven: number;
+  winningCreatives: number;
+  winningPercent: number;
+}
+
+export interface ScriptWriterDetail {
+  scriptWriter: string;
+  items: ProgressItem[]; // each carries its own videoName/editorName/matchedTakenLive for the drill-down
 }
 
 /**

@@ -24,10 +24,13 @@ function firstSegment(adName: string): string {
  * Both fields stay null until the sheet's "Completed" edit actually goes live — there's often a
  * lag between the two.
  */
-function matchVideo(item: ProgressItem, videos: PublishedVideo[]): { isWinning: boolean | null; durationSeconds: number | null } {
+function matchVideo(
+  item: ProgressItem,
+  videos: PublishedVideo[]
+): { isWinning: boolean | null; durationSeconds: number | null; takenLive: boolean | null } {
   const businessUnit = COHORT_TO_BUSINESS_UNIT[item.cohort];
   const targetConcept = normalizeTitleForMatching(item.videoName);
-  if (!businessUnit || !targetConcept) return { isWinning: null, durationSeconds: null };
+  if (!businessUnit || !targetConcept) return { isWinning: null, durationSeconds: null, takenLive: null };
 
   const candidates = videos.filter(
     (v) =>
@@ -37,10 +40,12 @@ function matchVideo(item: ProgressItem, videos: PublishedVideo[]): { isWinning: 
   );
 
   const main = candidates.find((v) => v.videoKind === "Main");
-  if (main) return { isWinning: main.isWinning, durationSeconds: main.durationSeconds };
+  if (main) return { isWinning: main.isWinning, durationSeconds: main.durationSeconds, takenLive: main.takenLive };
 
   const any = candidates[0];
-  return any ? { isWinning: any.isWinning, durationSeconds: null } : { isWinning: null, durationSeconds: null };
+  return any
+    ? { isWinning: any.isWinning, durationSeconds: null, takenLive: any.takenLive }
+    : { isWinning: null, durationSeconds: null, takenLive: null };
 }
 
 /**
@@ -58,7 +63,12 @@ export async function getProgressData(filters: DashboardFilters): Promise<Progre
     .map((item) => {
       if (item.status !== "Completed") return item; // only meaningful once actually done
       const match = matchVideo(item, videos);
-      return { ...item, matchedIsWinning: match.isWinning, matchedDurationSeconds: match.durationSeconds };
+      return {
+        ...item,
+        matchedIsWinning: match.isWinning,
+        matchedDurationSeconds: match.durationSeconds,
+        matchedTakenLive: match.takenLive,
+      };
     })
     .sort((a, b) => a.editorName.localeCompare(b.editorName));
 }

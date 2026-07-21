@@ -11,6 +11,7 @@ const HEADER_ALIASES = {
   adName: ["adname"],
   status: ["status"],
   editorName: ["editor"],
+  scriptWriter: ["scriptby"],
   // "Completed Date" (India tab) and "Date" (Foreign/Lumus tabs) occupy the same logical slot.
   // Note: the sheet's "Date done" column holds free-text labels (e.g. "All AI Concepts"), not
   // dates, in real data — deliberately not treated as a date field here.
@@ -94,10 +95,12 @@ export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.
         const editorNameRaw = editorNameCell.toLowerCase() === "none" ? "" : editorNameCell;
         const statusRaw = cellAt(row, locator.status).trim();
         const completedDateRaw = cellAt(row, locator.completedDate).trim();
+        const scriptWriterRaw = cellAt(row, locator.scriptWriter).trim();
 
         items.push({
           id: `${tab.name}::${index}`,
           editorName: editorNameRaw ? (normalizeEditorName(editorNameRaw, roster) ?? editorNameRaw) : "Unassigned",
+          scriptWriter: scriptWriterRaw || "Unassigned",
           videoName: cellAt(row, locator.adName).trim(),
           currentStage: statusRaw,
           status: normalizeStatus(statusRaw),
@@ -107,6 +110,7 @@ export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.
           // Filled in later by progressService, once it's matched against PublishedVideo.
           matchedIsWinning: null,
           matchedDurationSeconds: null,
+          matchedTakenLive: null,
         });
       });
   }
