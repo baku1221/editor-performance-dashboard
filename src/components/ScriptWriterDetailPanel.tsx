@@ -54,6 +54,7 @@ export function ScriptWriterDetailPanel({
                     <th className="px-3 py-2.5 font-medium">Cohort</th>
                     <th className="px-3 py-2.5 font-medium">Status</th>
                     <th className="px-3 py-2.5 font-medium">Taken Live</th>
+                    <th className="px-3 py-2.5 font-medium">Winning Creative</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -76,6 +77,15 @@ export function ScriptWriterDetailPanel({
                           <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">Yes</span>
                         ) : (
                           <span className="rounded-full bg-app-border px-2 py-0.5 text-xs font-medium text-app-muted">Not yet</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {item.matchedIsWinning === null ? (
+                          <span className="text-app-dim">—</span>
+                        ) : item.matchedIsWinning ? (
+                          <span className="rounded-full bg-green-500/15 px-2 py-0.5 text-xs font-medium text-green-300">Yes</span>
+                        ) : (
+                          <span className="rounded-full bg-app-border px-2 py-0.5 text-xs font-medium text-app-muted">No</span>
                         )}
                       </td>
                     </tr>
