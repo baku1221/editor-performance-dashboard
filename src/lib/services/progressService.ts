@@ -17,12 +17,14 @@ function firstSegment(adName: string): string {
 }
 
 /**
- * Matches a completed sheet row to the PublishedVideo it became on Meta, once it's live there —
+ * Matches a completed sheet row to the PublishedVideo(s) it became on Meta, once live there —
  * same editor, same business unit, and the ad title's first "|" segment (the concept name)
- * matches the sheet's Ad Name column. Prefers the Main version (duration is Main-only
- * everywhere else in this app); a Cut match is used only for winning status if no Main exists.
- * Both fields stay null until the sheet's "Completed" edit actually goes live — there's often a
- * lag between the two.
+ * matches the sheet's Ad Name column. Duration still prefers the Main version specifically
+ * (duration is Main-only everywhere else in this app). Winning status, though, counts the
+ * script as winning if ANY version — Main or any Cut — is winning: a script that only worked
+ * once a particular cut was tried is still a script that worked, not a failure just because its
+ * original Main cut underperformed. All fields stay null until the sheet's "Completed" edit
+ * actually goes live — there's often a lag between the two.
  */
 function matchVideo(
   item: ProgressItem,
@@ -39,13 +41,14 @@ function matchVideo(
       normalizeTitleForMatching(firstSegment(v.adName)) === targetConcept
   );
 
-  const main = candidates.find((v) => v.videoKind === "Main");
-  if (main) return { isWinning: main.isWinning, durationSeconds: main.durationSeconds, takenLive: main.takenLive };
+  if (candidates.length === 0) return { isWinning: null, durationSeconds: null, takenLive: null };
 
-  const any = candidates[0];
-  return any
-    ? { isWinning: any.isWinning, durationSeconds: null, takenLive: any.takenLive }
-    : { isWinning: null, durationSeconds: null, takenLive: null };
+  const main = candidates.find((v) => v.videoKind === "Main");
+  return {
+    isWinning: candidates.some((v) => v.isWinning),
+    durationSeconds: main ? main.durationSeconds : null,
+    takenLive: main ? main.takenLive : (candidates[0]?.takenLive ?? null),
+  };
 }
 
 /**

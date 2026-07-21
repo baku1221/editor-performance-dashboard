@@ -49,6 +49,7 @@ export function ScriptWriterDetailPanel({
                 <thead>
                   <tr className="border-b border-app-border bg-app-bg text-app-muted">
                     <th className="px-3 py-2.5 font-medium">Script Name</th>
+                    <th className="px-3 py-2.5 font-medium">Date</th>
                     <th className="px-3 py-2.5 font-medium">Editor</th>
                     <th className="px-3 py-2.5 font-medium">Cohort</th>
                     <th className="px-3 py-2.5 font-medium">Status</th>
@@ -62,6 +63,7 @@ export function ScriptWriterDetailPanel({
                       className={clsx("border-b border-app-border/60 last:border-0 hover:bg-white/5", index % 2 === 1 && "bg-white/[0.02]")}
                     >
                       <td className="px-3 py-2.5 text-app-text">{item.videoName}</td>
+                      <td className="px-3 py-2.5 text-app-muted">{item.startedDate || "—"}</td>
                       <td className="px-3 py-2.5 text-app-muted">{item.editorName}</td>
                       <td className="px-3 py-2.5 text-app-muted">{item.cohort}</td>
                       <td className="px-3 py-2.5">
