@@ -8,6 +8,7 @@ import {
   aggregateDaily,
   aggregateOperators,
   computeKpis,
+  firstNameKey,
   parseCreditsCsv,
   recentActivity,
   sortOperators,
@@ -120,13 +121,16 @@ export function CreditsTab() {
     [allRows, dateFilter, operatorFilter]
   );
 
-  // Keyed by lowercased editor name, combined across every business unit — a credits CSV
-  // "operator" name should match regardless of which account the editor's ads ran under.
+  // Keyed by firstNameKey, combined across every business unit — a credits CSV "operator" name
+  // should match regardless of which account the editor's ads ran under. firstNameKey (not a
+  // plain lowercase name) because the credits export uses login-style "Firstname.lastname"
+  // operator names (e.g. "Roshan.Dubey") that an exact match against the Performance tab's names
+  // ("Roshan Dubey", or just "Abhay" with no surname at all) would never line up with otherwise.
   const performanceByEditor = useMemo(() => {
     const map = new Map<string, EditorPerformanceLookup>();
     for (const row of performanceData?.rows ?? []) {
       if (row.editorName === "Unmapped") continue;
-      const key = row.editorName.toLowerCase();
+      const key = firstNameKey(row.editorName);
       const existing = map.get(key) ?? { mainAdsCount: 0, totalDurationSeconds: 0 };
       existing.mainAdsCount += row.mainAdsCount;
       existing.totalDurationSeconds += row.totalDurationSeconds;

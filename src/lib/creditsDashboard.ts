@@ -52,6 +52,20 @@ function normalizeHeader(header: string): string {
   return header.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+/**
+ * Reduces a name to its first-name key for matching a credits CSV "operator" against a
+ * Performance tab editor name — confirmed real case: the credits export uses login-style
+ * "Firstname.lastname" operator names (e.g. "Roshan.Dubey", "Abhay.dubey"), while the editor
+ * roster elsewhere is just first names ("Roshan Dubey" as one two-word name, "Abhay" alone) —
+ * neither an exact string match nor a full-name match would ever line these up. Splitting on any
+ * non-alphanumeric character and keeping only the first token matches on both: "roshan.dubey" and
+ * "roshan dubey" both reduce to "roshan". Only safe because the current roster has no two editors
+ * sharing a first name — if that ever changes, this would need a smarter (e.g. full-name) match.
+ */
+export function firstNameKey(name: string): string {
+  return (name.trim().split(/[^a-zA-Z0-9]+/)[0] ?? "").toLowerCase();
+}
+
 export interface ParseCreditsCsvResult {
   rows: CreditRow[];
   skippedRowCount: number;

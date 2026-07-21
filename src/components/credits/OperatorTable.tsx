@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import type { OperatorSummary, SortDir, SortKey } from "@/lib/creditsDashboard";
+import { firstNameKey, type OperatorSummary, type SortDir, type SortKey } from "@/lib/creditsDashboard";
 
 export interface EditorPerformanceLookup {
   mainAdsCount: number;
@@ -121,7 +121,7 @@ export function OperatorTable({
               </tr>
             )}
             {operators.map((op, index) => {
-              const perf = performanceByEditor.get(op.operator.toLowerCase());
+              const perf = performanceByEditor.get(firstNameKey(op.operator));
               const creditsPerMainAd = perf && perf.mainAdsCount > 0 ? round1(op.totalCredits / perf.mainAdsCount) : null;
               const creditsPerDuration =
                 perf && perf.totalDurationSeconds > 0 ? round1(op.totalCredits / perf.totalDurationSeconds) : null;
