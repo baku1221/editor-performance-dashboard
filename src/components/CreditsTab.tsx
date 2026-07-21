@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import clsx from "clsx";
+import { jsonFetcher } from "@/lib/swrFetcher";
 import {
   aggregateDaily,
   aggregateOperators,
@@ -14,9 +16,10 @@ import {
   type SortDir,
   type SortKey,
 } from "@/lib/creditsDashboard";
+import type { PerformanceData } from "@/lib/types";
 import { UploadZone } from "./credits/UploadZone";
 import { KpiCards } from "./credits/KpiCards";
-import { OperatorTable } from "./credits/OperatorTable";
+import { OperatorTable, type EditorPerformanceLookup } from "./credits/OperatorTable";
 import { DailyBreakdown } from "./credits/DailyBreakdown";
 import { ActivityFeed } from "./credits/ActivityFeed";
 import { CreditsPerClipEfficiencyChart, OperatorCreditsBarChart, OperatorShareDoughnutChart } from "./credits/Charts";
@@ -24,13 +27,35 @@ import { CreditsPerClipEfficiencyChart, OperatorCreditsBarChart, OperatorShareDo
 const fieldClass =
   "rounded-lg border border-credits-border bg-credits-bg px-2.5 py-1.5 text-sm text-credits-text focus:border-credits-accent focus:outline-none";
 
-// Self-contained: this tab has its own CSV, own filters, own state — independent of the
-// rest of the dashboard's Google Sheets / Meta Ads data and shared filter bar.
+interface StoredCreditsData {
+  rows: CreditRow[];
+  fileName: string;
+  uploadedAt: string;
+}
+
+// This tab has its own CSV, own filters, own state — independent of the rest of the dashboard's
+// Google Sheets / Meta Ads data and shared filter bar (date range, editor filter). It does,
+// though, cross-reference Performance data for the Credits/Main Ad and Credits/Duration columns
+// below — fetched here directly, all-time and unfiltered, rather than wired to the shared
+// FiltersBar, since a credits upload isn't scoped to whatever date range that bar happens to have.
 export function CreditsTab() {
+  const { data: stored, mutate: mutateStored } = useSWR<StoredCreditsData | null>("/api/credits", jsonFetcher);
+  const { data: performanceData } = useSWR<PerformanceData>("/api/performance", jsonFetcher);
+
   const [allRows, setAllRows] = useState<CreditRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Hydrates local state from whatever's persisted server-side — the CSV used to live only in
+  // React state, so a page refresh silently lost it. Also re-runs after a fresh upload's
+  // mutateStored() call, but by then the values already match, so it's a no-op then.
+  useEffect(() => {
+    if (!stored) return;
+    setAllRows(stored.rows);
+    setFileName(stored.fileName);
+    setLastUpdated(new Date(stored.uploadedAt).toLocaleString());
+  }, [stored]);
 
   const [dateFilter, setDateFilter] = useState("");
   const [operatorFilter, setOperatorFilter] = useState("");
@@ -39,7 +64,7 @@ export function CreditsTab() {
 
   function handleFile(file: File) {
     const reader = new FileReader();
-    reader.onload = () => {
+    reader.onload = async () => {
       const text = String(reader.result ?? "");
       const { rows, missingColumns } = parseCreditsCsv(text);
 
@@ -54,6 +79,18 @@ export function CreditsTab() {
       setLastUpdated(new Date().toLocaleString());
       setDateFilter("");
       setOperatorFilter("");
+
+      // Persists the upload so it survives a refresh — replaces whatever was stored before, no
+      // history of prior uploads is kept.
+      const res = await fetch("/api/credits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows, fileName: file.name }),
+      });
+      if (res.ok) {
+        const saved = (await res.json()) as StoredCreditsData;
+        mutateStored(saved, { revalidate: false });
+      }
     };
     reader.readAsText(file);
   }
@@ -82,6 +119,21 @@ export function CreditsTab() {
       ),
     [allRows, dateFilter, operatorFilter]
   );
+
+  // Keyed by lowercased editor name, combined across every business unit — a credits CSV
+  // "operator" name should match regardless of which account the editor's ads ran under.
+  const performanceByEditor = useMemo(() => {
+    const map = new Map<string, EditorPerformanceLookup>();
+    for (const row of performanceData?.rows ?? []) {
+      if (row.editorName === "Unmapped") continue;
+      const key = row.editorName.toLowerCase();
+      const existing = map.get(key) ?? { mainAdsCount: 0, totalDurationSeconds: 0 };
+      existing.mainAdsCount += row.mainAdsCount;
+      existing.totalDurationSeconds += row.totalDurationSeconds;
+      map.set(key, existing);
+    }
+    return map;
+  }, [performanceData]);
 
   const kpis = useMemo(() => computeKpis(filteredRows), [filteredRows]);
   const operators = useMemo(() => aggregateOperators(filteredRows), [filteredRows]);
@@ -163,6 +215,7 @@ export function CreditsTab() {
               sortDir={sortDir}
               onSort={handleSort}
               maxTotalCredits={maxTotalCredits}
+              performanceByEditor={performanceByEditor}
             />
 
             <ActivityFeed rows={activity} />

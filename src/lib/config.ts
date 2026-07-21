@@ -198,6 +198,12 @@ export const config = {
   // PerformanceTab.tsx's combineRowsByEditor and leaderboardService.ts's getTopEditorsByMainAds.
   // Astrotalk India is a separate, newer Meta ad account being tracked in isolation on purpose.
   excludedFromAllView: csv(process.env.EXCLUDE_FROM_ALL_VIEW).length > 0 ? csv(process.env.EXCLUDE_FROM_ALL_VIEW) : ["Astrotalk India"],
+  // The Copy Writer tab's roster — only these names show up there, even if the Progress Tracker
+  // sheet's "Script By" column has other values (pod codes, one-off contributors, etc.) mixed in.
+  scriptWriterRoster:
+    csv(process.env.SCRIPT_WRITER_ROSTER).length > 0
+      ? csv(process.env.SCRIPT_WRITER_ROSTER)
+      : ["Ridhima", "Shreya", "Samridhi", "Preyensha", "Moksh", "Vanshika", "Riya"],
   createdDateOverrides: parseCreatedDateOverrides(process.env.CREATED_DATE_MANUAL_OVERRIDES),
   googleDrive: {
     // Needed to read video duration from the Drive folders referenced above — a plain Sheets

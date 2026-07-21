@@ -1,4 +1,5 @@
 import type { ProgressItem, PublishedVideo, SyncStatus } from "../types";
+import type { CreditRow } from "../creditsDashboard";
 
 // In-memory data store — the ONLY place that holds mutable dashboard state.
 //
@@ -6,9 +7,13 @@ import type { ProgressItem, PublishedVideo, SyncStatus } from "../types";
 // swapping repositories to a real DB later means reimplementing the
 // Repository interfaces in src/lib/repositories/*, not touching services,
 // API routes, or the UI. Data lives for the lifetime of the server process
-// and is repopulated by /api/sync (Sheets + Meta). AI Credits is a separate,
-// fully client-side widget (see src/lib/creditsDashboard.ts) — it has no
-// server-side state here.
+// and is repopulated by /api/sync (Sheets + Meta).
+
+interface CreditsData {
+  rows: CreditRow[];
+  fileName: string;
+  uploadedAt: string; // ISO timestamp
+}
 
 interface Store {
   publishedVideos: PublishedVideo[];
@@ -20,6 +25,10 @@ interface Store {
   // file-persisted like editorRosterRepository) — worst case on a same-day redeploy is one
   // duplicate or one skipped send, low-stakes compared to editor roster data.
   slackLeaderboardLastSentDate: string | null;
+  // The AI Credits tab's most recently uploaded CSV — parsed client-side, then persisted here so
+  // it survives a page refresh instead of vanishing (it used to live only in React state).
+  // Uploading a new CSV replaces this outright; there's no history of prior uploads.
+  creditsData: CreditsData | null;
 }
 
 function createEmptyStore(): Store {
@@ -35,6 +44,7 @@ function createEmptyStore(): Store {
       },
     },
     slackLeaderboardLastSentDate: null,
+    creditsData: null,
   };
 }
 

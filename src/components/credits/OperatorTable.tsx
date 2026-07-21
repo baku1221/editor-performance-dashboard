@@ -3,6 +3,15 @@
 import clsx from "clsx";
 import type { OperatorSummary, SortDir, SortKey } from "@/lib/creditsDashboard";
 
+export interface EditorPerformanceLookup {
+  mainAdsCount: number;
+  totalDurationSeconds: number;
+}
+
+function round1(n: number): number {
+  return Math.round(n * 10) / 10;
+}
+
 const SORT_BUTTONS: Array<{ key: SortKey; label: string }> = [
   { key: "totalCredits", label: "Total Credits" },
   { key: "clips", label: "No. of Clips" },
@@ -48,12 +57,16 @@ export function OperatorTable({
   sortDir,
   onSort,
   maxTotalCredits,
+  performanceByEditor,
 }: {
   operators: OperatorSummary[];
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
   maxTotalCredits: number;
+  // Cross-referenced against the Performance tab, matched by lowercased operator/editor name —
+  // absent (or all-zero) when the CSV's operator name doesn't match any known editor.
+  performanceByEditor: Map<string, EditorPerformanceLookup>;
 }) {
   return (
     <div className="rounded-xl border border-credits-border bg-credits-card">
@@ -95,41 +108,52 @@ export function OperatorTable({
                 onSort={onSort}
               />
               <th className="px-4 py-3 font-medium text-credits-muted">Load</th>
+              <th className="px-4 py-3 font-medium text-credits-muted">Credits/Main Ad</th>
+              <th className="px-4 py-3 font-medium text-credits-muted">Credits/Duration (s)</th>
             </tr>
           </thead>
           <tbody>
             {operators.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-credits-dim">
+                <td colSpan={9} className="px-4 py-6 text-center text-credits-dim">
                   No data for the selected filters.
                 </td>
               </tr>
             )}
-            {operators.map((op, index) => (
-              <tr key={op.operator} className="border-b border-credits-border/60">
-                <td className="px-4 py-3 text-credits-dim">{index + 1}</td>
-                <td className="px-4 py-3 font-medium text-credits-text">{op.operator}</td>
-                <td className="px-4 py-3 text-credits-text">{op.clips}</td>
-                <td className="px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-credits-text">{op.totalCredits.toLocaleString()}</span>
-                    <div className="h-1.5 w-20 overflow-hidden rounded-full bg-credits-bg">
-                      <div
-                        className="h-full rounded-full bg-credits-accent"
-                        style={{ width: `${maxTotalCredits > 0 ? (op.totalCredits / maxTotalCredits) * 100 : 0}%` }}
-                      />
+            {operators.map((op, index) => {
+              const perf = performanceByEditor.get(op.operator.toLowerCase());
+              const creditsPerMainAd = perf && perf.mainAdsCount > 0 ? round1(op.totalCredits / perf.mainAdsCount) : null;
+              const creditsPerDuration =
+                perf && perf.totalDurationSeconds > 0 ? round1(op.totalCredits / perf.totalDurationSeconds) : null;
+
+              return (
+                <tr key={op.operator} className="border-b border-credits-border/60">
+                  <td className="px-4 py-3 text-credits-dim">{index + 1}</td>
+                  <td className="px-4 py-3 font-medium text-credits-text">{op.operator}</td>
+                  <td className="px-4 py-3 text-credits-text">{op.clips}</td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-credits-text">{op.totalCredits.toLocaleString()}</span>
+                      <div className="h-1.5 w-20 overflow-hidden rounded-full bg-credits-bg">
+                        <div
+                          className="h-full rounded-full bg-credits-accent"
+                          style={{ width: `${maxTotalCredits > 0 ? (op.totalCredits / maxTotalCredits) * 100 : 0}%` }}
+                        />
+                      </div>
                     </div>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-credits-text">{op.pctConsumption}%</td>
-                <td className="px-4 py-3 text-credits-text">{op.creditsPerClip}</td>
-                <td className="px-4 py-3">
-                  <span className={clsx("rounded-full px-2.5 py-1 text-xs font-medium", LOAD_STYLES[op.load])}>
-                    {op.load}
-                  </span>
-                </td>
-              </tr>
-            ))}
+                  </td>
+                  <td className="px-4 py-3 text-credits-text">{op.pctConsumption}%</td>
+                  <td className="px-4 py-3 text-credits-text">{op.creditsPerClip}</td>
+                  <td className="px-4 py-3">
+                    <span className={clsx("rounded-full px-2.5 py-1 text-xs font-medium", LOAD_STYLES[op.load])}>
+                      {op.load}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-credits-text">{creditsPerMainAd ?? "—"}</td>
+                  <td className="px-4 py-3 text-credits-text">{creditsPerDuration ?? "—"}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
