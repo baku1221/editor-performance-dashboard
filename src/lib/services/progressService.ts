@@ -10,6 +10,7 @@ import { editorMatchesFilter } from "../filters";
 const COHORT_TO_BUSINESS_UNIT: Record<string, string> = {
   "Astrotalk Foreign": "Astrotalk",
   Lumus: "Lumus",
+  India: "Astrotalk India",
 };
 
 function firstSegment(adName: string): string {

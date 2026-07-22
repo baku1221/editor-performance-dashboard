@@ -10,15 +10,17 @@ import { StatusBadge } from "./StatusBadge";
 export function ScriptWriterDetailPanel({
   scriptWriter,
   filters,
+  group,
   onClose,
 }: {
   scriptWriter: string;
   filters: UiFilters;
+  group: "Foreign" | "India";
   onClose: () => void;
 }) {
   const query = buildQueryString(filters);
   const { data, isLoading } = useSWR<ScriptWriterDetail>(
-    `/api/scriptwriters/${encodeURIComponent(scriptWriter)}?${query}`,
+    `/api/scriptwriters/${encodeURIComponent(scriptWriter)}?${query}&group=${group}`,
     jsonFetcher
   );
 
