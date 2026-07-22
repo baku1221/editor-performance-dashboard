@@ -10,16 +10,28 @@ export interface UiFilters {
 
 export const emptyFilters: UiFilters = { from: "", to: "", editor: "" };
 
-function toLocalIso(d: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+// The team is India-based and every other "today"/date-window calculation in this app (the
+// Slack leaderboard, the sync window) is deliberately anchored to Asia/Kolkata — this must match,
+// or "today" here can silently read as yesterday for any viewer whose browser/OS clock is set to
+// a timezone behind IST (e.g. a US-based browser late at night IST but still "yesterday" locally).
+const DASHBOARD_TIMEZONE = "Asia/Kolkata";
+
+/** "yyyy-MM-dd" for the current moment, as that calendar day reads in `timeZone` — not the browser's local timezone. */
+function todayInTimezone(timeZone: string): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
 /** Initial filter state on page load — "This month" through today, not "Clear filters"'s Maximum. */
 export function defaultFilters(): UiFilters {
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  return { from: toLocalIso(monthStart), to: toLocalIso(now), editor: "" };
+  const to = todayInTimezone(DASHBOARD_TIMEZONE);
+  return { from: `${to.slice(0, 7)}-01`, to, editor: "" };
 }
 
 export function buildQueryString(filters: UiFilters): string {
