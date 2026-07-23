@@ -16,6 +16,13 @@ const ALLOWED_DOMAIN = (process.env.ALLOWED_GOOGLE_DOMAIN ?? "").toLowerCase();
 // member is enough to view the dashboard, but not enough to mutate the editor roster.
 export const ADMIN_EMAILS = csv(process.env.ADMIN_EMAILS);
 
+// The Copy Writer tab's India view is sensitive to just these two people — everyone else in the
+// org can still see the Foreign view and everything else in the dashboard.
+export const INDIA_COPYWRITER_EMAILS =
+  csv(process.env.INDIA_COPYWRITER_EMAILS).length > 0
+    ? csv(process.env.INDIA_COPYWRITER_EMAILS)
+    : ["avni.mittal@astrotalk.com", "sarthak.yadav@astrotalk.com"];
+
 export const authOptions: AuthOptions = {
   providers: [
     GoogleProvider({
@@ -39,4 +46,9 @@ export const authOptions: AuthOptions = {
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+export function canViewIndiaCopywriters(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return INDIA_COPYWRITER_EMAILS.includes(email.toLowerCase());
 }

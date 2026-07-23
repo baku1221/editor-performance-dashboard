@@ -13,11 +13,6 @@ type ScriptWriterGroup = "Foreign" | "India";
 type SortKey = "scriptsGiven" | "winningCreatives" | "winningPercent";
 type SortDir = "asc" | "desc";
 
-const GROUPS: Array<{ key: ScriptWriterGroup; label: string }> = [
-  { key: "Foreign", label: "Foreign" },
-  { key: "India", label: "India" },
-];
-
 function sortRows(rows: ScriptWriterRow[], sortKey: SortKey, sortDir: SortDir): ScriptWriterRow[] {
   const sorted = [...rows].sort((a, b) => a[sortKey] - b[sortKey]);
   return sortDir === "desc" ? sorted.reverse() : sorted;
@@ -48,6 +43,17 @@ export function ScriptWriterTab({ filters }: { filters: UiFilters }) {
   const [group, setGroup] = useState<ScriptWriterGroup>("Foreign");
   const query = buildQueryString(filters);
   const { data, isLoading } = useSWR<ScriptWriterRow[]>(`/api/scriptwriters?${query}&group=${group}`, jsonFetcher);
+  // The India sub-tab itself is hidden from anyone not on the allowlist — the allowlist stays
+  // server-side (see /api/scriptwriters/access), this just tells the client whether to render the
+  // button at all. The API routes enforce this independently, so hiding the button is a UX nicety,
+  // not the actual security boundary.
+  const { data: access } = useSWR<{ canViewIndia: boolean }>("/api/scriptwriters/access", jsonFetcher);
+  const groups: Array<{ key: ScriptWriterGroup; label: string }> = access?.canViewIndia
+    ? [
+        { key: "Foreign", label: "Foreign" },
+        { key: "India", label: "India" },
+      ]
+    : [{ key: "Foreign", label: "Foreign" }];
   const [selectedWriter, setSelectedWriter] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("scriptsGiven");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -73,7 +79,7 @@ export function ScriptWriterTab({ filters }: { filters: UiFilters }) {
   return (
     <div className="space-y-4">
       <div className="flex gap-1 rounded-lg border border-app-border bg-app-card p-1 shadow-sm w-fit">
-        {GROUPS.map((g) => (
+        {groups.map((g) => (
           <button
             key={g.key}
             onClick={() => handleSelectGroup(g.key)}
