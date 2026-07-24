@@ -16,6 +16,14 @@ const ALLOWED_DOMAIN = (process.env.ALLOWED_GOOGLE_DOMAIN ?? "").toLowerCase();
 // member is enough to view the dashboard, but not enough to mutate the editor roster.
 export const ADMIN_EMAILS = csv(process.env.ADMIN_EMAILS);
 
+// Row-level (not whole-tab) restriction: only these two can see Avni's row in the Copy Writer
+// tab's India view — everyone else still sees every other India writer normally, just with
+// Avni's row missing from the list and her detail drill-down blocked.
+export const AVNI_ROW_VIEWER_EMAILS =
+  csv(process.env.AVNI_ROW_VIEWER_EMAILS).length > 0
+    ? csv(process.env.AVNI_ROW_VIEWER_EMAILS)
+    : ["avni.mittal@astrotalk.com", "sarthak.yadav@astrotalk.com"];
+
 export const authOptions: AuthOptions = {
   providers: [
     GoogleProvider({
@@ -39,4 +47,9 @@ export const authOptions: AuthOptions = {
 export function isAdminEmail(email: string | null | undefined): boolean {
   if (!email) return false;
   return ADMIN_EMAILS.includes(email.toLowerCase());
+}
+
+export function canViewAvniRow(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return AVNI_ROW_VIEWER_EMAILS.includes(email.toLowerCase());
 }
