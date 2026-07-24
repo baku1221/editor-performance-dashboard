@@ -25,6 +25,23 @@ function iso(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+// The team is India-based and every other "today" calculation in this app (defaultFilters, the
+// Slack leaderboard, the sync window) is deliberately anchored to Asia/Kolkata — the "Today"
+// preset must match, or it silently reads as yesterday for any viewer whose browser/OS clock is
+// set to a timezone behind IST. Returns a plain local Date object carrying IST's calendar
+// year/month/day (not an instant) so every getFullYear/getMonth/getDate call elsewhere in this
+// file — and all the addDays/startOfMonth arithmetic built on top of them — just works.
+function todayInIst(): Date {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return new Date(get("year"), get("month") - 1, get("day"));
+}
+
 function parseIsoLocal(value: string): Date {
   const parts = value.split("-").map(Number);
   const y = parts[0] ?? 1970;
@@ -158,10 +175,10 @@ export function DateRangePicker({ from, to, onApply }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
   const [draftFrom, setDraftFrom] = useState(from);
   const [draftTo, setDraftTo] = useState(to);
-  const [rightMonth, setRightMonth] = useState(() => startOfMonth(new Date()));
+  const [rightMonth, setRightMonth] = useState(() => startOfMonth(todayInIst()));
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const today = useMemo(() => new Date(), []);
+  const today = useMemo(() => todayInIst(), []);
   const presets = useMemo(() => buildPresets(today), [today]);
   const leftMonth = addMonths(rightMonth, -1);
 
