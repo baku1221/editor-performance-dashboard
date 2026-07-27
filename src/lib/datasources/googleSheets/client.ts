@@ -7,24 +7,74 @@ export interface SheetTable {
   rows: string[][];
 }
 
+// sheetId -> (tab name -> gid). Populated once per sheet per process lifetime — the tab-name-to-
+// gid mapping essentially never changes, so there's no need to re-fetch it on every sync.
+const gidCacheBySheet = new Map<string, Map<string, string>>();
+
+/**
+ * Scrapes the sheet's own htmlview page for its tab-name-to-gid mapping — there's no documented,
+ * unauthenticated endpoint for this, but every Sheets htmlview page embeds a JS array of
+ * `{name, pageUrl (containing "gid=<id>")}` entries for its tab switcher, which is stable enough
+ * to rely on in practice.
+ */
+async function fetchGidMap(sheetId: string): Promise<Map<string, string>> {
+  const res = await fetch(`https://docs.google.com/spreadsheets/d/${sheetId}/htmlview`);
+  const html = await res.text();
+  const map = new Map<string, string>();
+  for (const match of html.matchAll(/name: "([^"]+)", pageUrl:.*?gid=(-?\d+)/g)) {
+    const name = match[1];
+    const gid = match[2];
+    if (name && gid) map.set(name, gid);
+  }
+  return map;
+}
+
+async function resolveGid(sheetId: string, tabName: string): Promise<string | undefined> {
+  let gids = gidCacheBySheet.get(sheetId);
+  if (!gids) {
+    gids = await fetchGidMap(sheetId);
+    gidCacheBySheet.set(sheetId, gids);
+  }
+  return gids.get(tabName);
+}
+
 /**
  * A link-shared sheet ("Anyone with the link can view") is readable as plain
- * CSV via Google's public gviz export — no API key or service account
+ * CSV via Google's public export endpoint — no API key or service account
  * needed. This is the zero-config default. If credentials are set (for a
  * restricted sheet later), the authenticated Sheets API path is used
  * instead — see fetchViaAuthenticatedApi below.
+ *
+ * Uses /export?format=csv rather than the gviz/tq endpoint this used to call — confirmed real
+ * case: gviz's cache got stuck on stale data for 30+ minutes after a live edit (re-typing the
+ * same cell twice didn't help), while /export reflected edits immediately every time it was
+ * checked. /export also sidesteps two gviz-specific quirks entirely: its header-row heuristic
+ * that sometimes fuses a header label onto the first data row's value (previously worked around
+ * with a substring-match column locator — see driveCreatives.ts) and the blank "Posted
+ * Date"/"Idea Num" headers gviz produced for the Progress Tracker sheet (previously worked around
+ * with positional fallbacks — see buildColumnLocator in progressTracker.ts). Both sets of
+ * workarounds are left in place since they're harmless no-ops against clean headers, not removed
+ * here to keep this fix scoped to just the fetch mechanism.
+ *
+ * Resolves the tab name to its gid first and always fetches by `gid=`, never by `sheet=<name>` —
+ * confirmed real case on the Progress Tracker sheet: /export's own name-based lookup silently
+ * returned the SAME tab's content for both "Ad Tracker-foreign(AT)" and "...(LUMUS)" (identical
+ * rows, same "Astrotalk" platform value for what should have been the distinct Lumus tab) — the
+ * exact "wrong/ambiguous sheet wins silently" failure mode this app has already hit with gviz
+ * elsewhere, just triggered by a different endpoint. gid-based lookup doesn't have this ambiguity
+ * since a gid is unique per tab. Falls back to `sheet=<name>` only if gid resolution itself fails
+ * (e.g. the htmlview scrape breaks), which is no worse than this function's old behavior.
  */
 async function fetchViaPublicCsvExport(sheetId: string, tabName: string): Promise<SheetTable> {
-  const url = new URL(`https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq`);
-  url.searchParams.set("tqx", "out:csv");
-  url.searchParams.set("sheet", tabName);
-  // Without this, gviz auto-detects how many header rows exist — and its heuristic can badly
-  // misfire: confirmed on real sheets in this org, it sometimes decides row 1 isn't a real
-  // header and instead synthesizes one by concatenating dozens of real data rows' values into
-  // a single garbled "header" cell per column, silently swallowing that data from the export
-  // entirely. headers=0 tells it definitively "don't guess, there is no header row" — we already
-  // slice row 1 off ourselves below, so this can't lose data either way.
-  url.searchParams.set("headers", "0");
+  const url = new URL(`https://docs.google.com/spreadsheets/d/${sheetId}/export`);
+  url.searchParams.set("format", "csv");
+
+  const gid = await resolveGid(sheetId, tabName).catch(() => undefined);
+  if (gid) {
+    url.searchParams.set("gid", gid);
+  } else {
+    url.searchParams.set("sheet", tabName);
+  }
 
   const res = await fetch(url.toString());
   if (!res.ok) {
