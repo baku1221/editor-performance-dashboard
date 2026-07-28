@@ -63,6 +63,23 @@ function normalizeHeader(header: string): string {
 }
 
 /**
+ * A column that's either genuinely blank, or has one of a small, specific set of confirmed-safe
+ * date-ish labels — used by the positional dateMade fallbacks below. Switching the underlying
+ * fetch from gviz to /export (see client.ts) revealed that several of these "blank header"
+ * columns were never actually blank — gviz itself was corrupting/dropping the label — they're
+ * really "Date" (Astrotalk) or "Video Date" (Social Media). The plain `!normalized[i]` blank check
+ * these fallbacks used to rely on stopped matching once the real label showed through, silently
+ * un-locating the column. Deliberately NOT a general "includes date" substring check — that's the
+ * exact false-positive shape as the Lumus "Live date" bug this file already documents ("videodate"
+ * and "date" would otherwise collide with unrelated date-ish columns on other sheets) — only the
+ * specific labels confirmed to live in each position are accepted.
+ */
+function isBlankOrKnownDateLabel(header: string | undefined, knownLabels: readonly string[]): boolean {
+  if (!header) return true;
+  return (knownLabels as string[]).includes(header);
+}
+
+/**
  * Substring match, not exact equality: this sheet's gviz CSV export garbles row 0 by fusing
  * the header label onto the first data row's value in the same cell (e.g. "Meta Ad ID
  * 120245223571090068" instead of just "Meta Ad ID") — exact equality against that text always
@@ -80,28 +97,38 @@ function buildColumnLocator(headers: string[]): Partial<Record<Field, number>> {
     if (index !== -1) locator[field] = index;
   }
 
-  // The Astrotalk sheet has a genuine per-row date column (real values like "01-07-26"), but its
-  // header cell is blank — confirmed reliably positioned immediately after "Category" whenever
-  // the header itself doesn't name it. Same "corrupted header, fall back to a known position"
-  // pattern already used for the Progress Tracker sheet's Posted Date/Completed Date columns.
-  // Guarded on the header actually being blank: the Astrotalk Store sheet's "Category" column is
-  // immediately followed by a properly-labeled "Link" column, not a blank one — applying this
-  // fallback unconditionally would misread that real column as a date.
-  if (locator.dateMade === undefined && locator.category !== undefined && !normalized[locator.category + 1]) {
+  // The Astrotalk sheet has a genuine per-row date column (real values like "01-07-26"),
+  // confirmed reliably positioned immediately after "Category". Its header is blank under gviz
+  // but reads exactly "Date" under /export (see isBlankOrKnownDateLabel) — either way, this is
+  // the same "corrupted/hidden header, fall back to a known position" pattern already used for
+  // the Progress Tracker sheet's Posted Date/Completed Date columns. Guarded so it can't misfire:
+  // the Astrotalk Store sheet's "Category" column is immediately followed by a properly-labeled
+  // "Link" column, neither blank nor "date".
+  if (
+    locator.dateMade === undefined &&
+    locator.category !== undefined &&
+    isBlankOrKnownDateLabel(normalized[locator.category + 1], ["date"])
+  ) {
     locator.dateMade = locator.category + 1;
   }
 
-  // The Social Media sheet puts its blank-header date column on the OTHER side of Link — a
-  // "Content, Editor, Status, [blank date], Drive Link" layout, date immediately before the link
-  // column rather than after. Confirmed 100% populated. Checked BEFORE the link+1 fallback below
-  // — confirmed real bug otherwise: this sheet also has a genuinely blank, unused leftover column
-  // right after Link (a repeated-block template artifact with no data in it at all), so link+1's
-  // blank-header check would misfire and claim that empty column as the date instead, the same
-  // "wrong blank column wins" failure mode as the Lumus "Live date" bug. Safe to check first:
-  // on every other configured sheet, the column before Link is either a real non-blank header
-  // (Lumus's "Category", Astrotalk Store's "Category") or coincides with the Astrotalk sheet's
-  // own category+1 slot (already claimed above), so this can't misfire elsewhere.
-  if (locator.dateMade === undefined && locator.link !== undefined && locator.link > 0 && !normalized[locator.link - 1]) {
+  // The Social Media sheet puts its date column on the OTHER side of Link — a "Content, Editor,
+  // Status, [date], Drive Link" layout, date immediately before the link column rather than
+  // after. Confirmed 100% populated. Blank under gviz, reads exactly "Video Date" under /export.
+  // Checked BEFORE the link+1 fallback below — confirmed real bug otherwise: this sheet also has
+  // a genuinely blank, unused leftover column right after Link (a repeated-block template
+  // artifact with no data in it at all), so link+1's check would misfire and claim that empty
+  // column as the date instead, the same "wrong blank column wins" failure mode as the Lumus
+  // "Live date" bug. Safe to check first: on every other configured sheet, the column before Link
+  // is either a real non-blank, non-"date" header (Lumus's "Category", Astrotalk Store's
+  // "Category") or coincides with the Astrotalk sheet's own category+1 slot (already claimed
+  // above), so this can't misfire elsewhere.
+  if (
+    locator.dateMade === undefined &&
+    locator.link !== undefined &&
+    locator.link > 0 &&
+    isBlankOrKnownDateLabel(normalized[locator.link - 1], ["videodate"])
+  ) {
     locator.dateMade = locator.link - 1;
   }
 
