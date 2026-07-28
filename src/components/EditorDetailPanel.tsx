@@ -13,6 +13,7 @@ const UNIT_ACCENT: Record<string, string> = {
   "Astrotalk Store": "border-teal-800/50 bg-teal-950/40",
   "Social Media": "border-pink-800/50 bg-pink-950/40",
   "Astrotalk India": "border-orange-800/50 bg-orange-950/40",
+  "Pandit Ji": "border-indigo-800/50 bg-indigo-950/40",
 };
 
 // Same colors as UNIT_ACCENT, just compact enough for an inline table badge — most useful in the
@@ -23,6 +24,7 @@ const UNIT_BADGE: Record<string, string> = {
   "Astrotalk Store": "bg-teal-500/15 text-teal-300",
   "Social Media": "bg-pink-500/15 text-pink-300",
   "Astrotalk India": "bg-orange-500/15 text-orange-300",
+  "Pandit Ji": "bg-indigo-500/15 text-indigo-300",
 };
 
 // Selected/active state for the sub-tabs, keyed the same way as UNIT_BADGE above.
@@ -32,13 +34,14 @@ const UNIT_TAB_ACTIVE: Record<string, string> = {
   "Astrotalk Store": "bg-teal-400 text-gray-900",
   "Social Media": "bg-pink-400 text-gray-900",
   "Astrotalk India": "bg-orange-400 text-gray-900",
+  "Pandit Ji": "bg-indigo-400 text-gray-900",
 };
 
 const ALL_DETAIL_UNIT = "All";
 
 // Same preferred display order as PerformanceTab's business-unit tabs, kept local since it's a
 // small, presentation-only constant.
-const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media"];
+const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media", "Pandit Ji"];
 
 function sortBusinessUnits(units: string[]): string[] {
   return [...units].sort((a, b) => {

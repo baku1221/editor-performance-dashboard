@@ -195,12 +195,25 @@ export const config = {
       tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_6).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_6) : ["July 2026", "June 2026"],
       businessUnit: "Astrotalk India",
     },
+    // "Pandit Ji AI Creatives" sheet — a separate app/product ("Pandit Ji AI"), its own business
+    // unit. No Meta ad account is configured for it yet (its ads currently run under a Meta ad
+    // account this dashboard doesn't fetch), so — same as Social Media above — every row stays
+    // sheet-only (no live status/CPI) until one is wired up. Same Type column (Static/AI Static
+    // excluded by default) and column layout as the Astrotalk sheet (slot 2), including the
+    // Category-then-Date column pair, so no locator changes were needed in driveCreatives.ts.
+    {
+      sheetId: process.env.DRIVE_CREATIVE_SHEET_ID_7 ?? "",
+      tabs: csv(process.env.DRIVE_CREATIVE_SHEET_TABS_7).length > 0 ? csv(process.env.DRIVE_CREATIVE_SHEET_TABS_7) : ["July 2026"],
+      businessUnit: "Pandit Ji",
+    },
   ].filter((s) => s.sheetId),
   // Business units in this list still get their own selectable Performance-tab, but are left out
   // of the "All" combined view/summary and the Slack leaderboard's cross-unit ranking — see
   // PerformanceTab.tsx's combineRowsByEditor and leaderboardService.ts's getTopEditorsByMainAds.
-  // Astrotalk India is a separate, newer Meta ad account being tracked in isolation on purpose.
-  excludedFromAllView: csv(process.env.EXCLUDE_FROM_ALL_VIEW).length > 0 ? csv(process.env.EXCLUDE_FROM_ALL_VIEW) : ["Astrotalk India"],
+  // Astrotalk India is a separate, newer Meta ad account being tracked in isolation on purpose;
+  // Pandit Ji is a distinct product the team wants tracked separately from the combined view too.
+  excludedFromAllView:
+    csv(process.env.EXCLUDE_FROM_ALL_VIEW).length > 0 ? csv(process.env.EXCLUDE_FROM_ALL_VIEW) : ["Astrotalk India", "Pandit Ji"],
   // The Copy Writer tab's "Foreign" (Lumus + Astrotalk Foreign) roster — only these names show up
   // there, even if the Progress Tracker sheet's "Script By" column has other values (pod codes,
   // one-off contributors, etc.) mixed in.

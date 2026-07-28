@@ -13,7 +13,7 @@ import { EditorDetailPanel } from "./EditorDetailPanel";
 const ALL_UNIT = "All";
 
 // Preferred display order for the known business units; anything else falls back to alphabetical.
-const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media"];
+const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media", "Pandit Ji"];
 
 function sortBusinessUnits(units: string[]): string[] {
   return [...units].sort((a, b) => {
@@ -70,6 +70,13 @@ const UNIT_THEME: Record<string, { tab: string; panel: string; header: string; a
     header: "bg-orange-950/50 border-orange-800/50 text-orange-300",
     accentText: "text-orange-300",
     rowHover: "hover:bg-orange-500/10",
+  },
+  "Pandit Ji": {
+    tab: "bg-indigo-400 text-gray-900",
+    panel: "border-indigo-800/50 bg-indigo-950/20",
+    header: "bg-indigo-950/50 border-indigo-800/50 text-indigo-300",
+    accentText: "text-indigo-300",
+    rowHover: "hover:bg-indigo-500/10",
   },
 };
 
