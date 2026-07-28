@@ -47,6 +47,11 @@ const DEFAULT_ACCOUNT_LABELS: Record<string, string> = {
   act_2021416865462021: "Astrotalk",
   act_2158343221618433: "Astrotalk Store",
   act_872869545439171: "Astrotalk India",
+  // Must match the "Pandit Ji" businessUnit used in driveCreativeSheets below — matchMetaAd
+  // (syncService.ts) requires a Meta ad's businessUnit to equal the sheet row's businessUnit
+  // before its word-subset/stage-segment fallback matches can fire (the exact-Meta-Ad-ID match
+  // doesn't need this, but rows logged without one do).
+  act_982289496581985: "Pandit Ji",
 };
 
 export interface EditorRosterEntry {
