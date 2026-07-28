@@ -25,6 +25,32 @@ const UNIT_BADGE: Record<string, string> = {
   "Astrotalk India": "bg-orange-500/15 text-orange-300",
 };
 
+// Selected/active state for the sub-tabs, keyed the same way as UNIT_BADGE above.
+const UNIT_TAB_ACTIVE: Record<string, string> = {
+  Lumus: "bg-purple-600 text-white",
+  Astrotalk: "bg-yellow-400 text-gray-900",
+  "Astrotalk Store": "bg-teal-400 text-gray-900",
+  "Social Media": "bg-pink-400 text-gray-900",
+  "Astrotalk India": "bg-orange-400 text-gray-900",
+};
+
+const ALL_DETAIL_UNIT = "All";
+
+// Same preferred display order as PerformanceTab's business-unit tabs, kept local since it's a
+// small, presentation-only constant.
+const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media"];
+
+function sortBusinessUnits(units: string[]): string[] {
+  return [...units].sort((a, b) => {
+    const ai = BUSINESS_UNIT_ORDER.indexOf(a);
+    const bi = BUSINESS_UNIT_ORDER.indexOf(b);
+    if (ai !== -1 && bi !== -1) return ai - bi;
+    if (ai !== -1) return -1;
+    if (bi !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 export function EditorDetailPanel({
   editorName,
   filters,
@@ -45,20 +71,40 @@ export function EditorDetailPanel({
 
   const [includeCuts, setIncludeCuts] = useState(false);
 
-  const mainCount = useMemo(() => data?.videos.filter((v) => v.videoKind === "Main").length ?? 0, [data]);
-  const cutCount = useMemo(() => data?.videos.filter((v) => v.videoKind === "Cut").length ?? 0, [data]);
-  const otherCount = (data?.videos.length ?? 0) - mainCount - cutCount;
+  // Only relevant in the combined "All" view (businessUnit prop unset) — a single-unit view
+  // already has just one business unit in its data, so there's nothing to split.
+  const [activeDetailUnit, setActiveDetailUnit] = useState<string>(ALL_DETAIL_UNIT);
+  const detailUnits = useMemo(() => {
+    if (businessUnit || !data) return [];
+    return sortBusinessUnits([...new Set(data.videos.map((v) => v.businessUnit))]);
+  }, [businessUnit, data]);
+
+  const unitFilteredVideos = useMemo(() => {
+    if (!data) return [];
+    if (activeDetailUnit === ALL_DETAIL_UNIT) return data.videos;
+    return data.videos.filter((v) => v.businessUnit === activeDetailUnit);
+  }, [data, activeDetailUnit]);
+
+  const mainCount = useMemo(
+    () => unitFilteredVideos.filter((v) => v.videoKind === "Main").length,
+    [unitFilteredVideos]
+  );
+  const cutCount = useMemo(
+    () => unitFilteredVideos.filter((v) => v.videoKind === "Cut").length,
+    [unitFilteredVideos]
+  );
+  const otherCount = unitFilteredVideos.length - mainCount - cutCount;
 
   // Default view: Main only. "Include cuts" reveals every ad (Main + Cut + unclassified).
   const visibleVideos = useMemo(() => {
-    if (!data) return [];
-    return includeCuts ? data.videos : data.videos.filter((v) => v.videoKind === "Main");
-  }, [data, includeCuts]);
+    return includeCuts ? unitFilteredVideos : unitFilteredVideos.filter((v) => v.videoKind === "Main");
+  }, [unitFilteredVideos, includeCuts]);
 
   const accentClass = (businessUnit && UNIT_ACCENT[businessUnit]) || "border-app-border bg-app-bg";
   // Astrotalk Store's winning rule is spend-based (a Purchase-objective account), not CPI like
-  // the other two — showing CPI there would be a number nobody set a target for.
-  const showSpendInsteadOfCpi = businessUnit === "Astrotalk Store";
+  // the other two — showing CPI there would be a number nobody set a target for. In the combined
+  // "All" view this depends on whichever business-unit sub-tab is active, not the (unset) prop.
+  const showSpendInsteadOfCpi = (businessUnit ?? activeDetailUnit) === "Astrotalk Store";
 
   return (
     <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
@@ -88,6 +134,36 @@ export function EditorDetailPanel({
 
           {data && data.videos.length > 0 && (
             <>
+              {detailUnits.length > 1 && (
+                <div className="mb-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setActiveDetailUnit(ALL_DETAIL_UNIT)}
+                    className={clsx(
+                      "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                      activeDetailUnit === ALL_DETAIL_UNIT
+                        ? "border border-app-border bg-white/10 text-app-text"
+                        : "text-app-muted hover:bg-white/5 hover:text-app-text"
+                    )}
+                  >
+                    All
+                  </button>
+                  {detailUnits.map((unit) => (
+                    <button
+                      key={unit}
+                      onClick={() => setActiveDetailUnit(unit)}
+                      className={clsx(
+                        "rounded-full px-3 py-1.5 text-xs font-medium transition",
+                        activeDetailUnit === unit
+                          ? (UNIT_TAB_ACTIVE[unit] ?? "bg-white/10 text-app-text")
+                          : "text-app-muted hover:bg-white/5 hover:text-app-text"
+                      )}
+                    >
+                      {unit}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-app-border bg-app-bg px-4 py-3">
                 <div className="flex flex-wrap items-center gap-4">
                   <div>
