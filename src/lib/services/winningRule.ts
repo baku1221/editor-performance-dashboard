@@ -1,4 +1,4 @@
-import type { PublishedVideo, WinningRuleConfig } from "../types";
+import type { PublishedVideo, WinningNamePatternRule, WinningRuleConfig } from "../types";
 
 function getMetricValue(video: PublishedVideo, metric: WinningRuleConfig["metric"]): number | null {
   switch (metric) {
@@ -38,16 +38,30 @@ function compare(value: number, operator: WinningRuleConfig["operator"], thresho
  * `ruleOverridesByBusinessUnit` swaps the rule entirely for specific business units whose
  * economics don't fit the global one — e.g. Astrotalk Store is a Purchase-objective account
  * where "Winning" means spend crossing a threshold, not CPI/CPA like the app-install accounts.
+ *
+ * `namePatternOverridesByBusinessUnit` is checked FIRST, ahead of the metric-based rule/override —
+ * for a business unit like Pandit Ji, "Winning" isn't a metric threshold at all, it's an ad-name
+ * naming convention (see WinningNamePatternRule's doc comment in types.ts).
  */
 export function applyWinningRule(
   videos: PublishedVideo[],
   rule: WinningRuleConfig,
   manualOverrides: Map<string, boolean>,
-  ruleOverridesByBusinessUnit: Record<string, WinningRuleConfig> = {}
+  ruleOverridesByBusinessUnit: Record<string, WinningRuleConfig> = {},
+  namePatternOverridesByBusinessUnit: Record<string, WinningNamePatternRule> = {}
 ): PublishedVideo[] {
   return videos.map((video) => {
     if (manualOverrides.has(video.id)) {
       return { ...video, isWinning: manualOverrides.get(video.id) ?? false, winningSource: "manual" };
+    }
+
+    const namePattern = namePatternOverridesByBusinessUnit[video.businessUnit];
+    if (namePattern) {
+      const adNameMatches = video.adName.toLowerCase().includes(namePattern.adNameIncludes.toLowerCase());
+      const campaignMatches =
+        !namePattern.campaignNameIncludes || video.campaignName.toLowerCase().includes(namePattern.campaignNameIncludes.toLowerCase());
+      const isWinning = adNameMatches && campaignMatches;
+      return { ...video, isWinning, winningSource: isWinning ? "rule" : null };
     }
 
     const effectiveRule = ruleOverridesByBusinessUnit[video.businessUnit] ?? rule;

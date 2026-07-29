@@ -292,7 +292,7 @@ export async function recomputeWinningFlags(): Promise<void> {
     publishedVideoRepository.getManualOverrides(),
   ]);
 
-  const flagged = applyWinningRule(videos, config.winningRule, overrides, config.winningRuleOverrides);
+  const flagged = applyWinningRule(videos, config.winningRule, overrides, config.winningRuleOverrides, config.winningNamePatternOverrides);
   await publishedVideoRepository.replaceAll(flagged);
 }
 

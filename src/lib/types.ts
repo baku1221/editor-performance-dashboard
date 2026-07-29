@@ -91,6 +91,15 @@ export interface WinningRuleConfig {
   value: number;
 }
 
+// A wholly different shape of "winning" rule — matched by ad/campaign NAME substring rather than
+// a numeric metric threshold. Used for business units (e.g. Pandit Ji) whose winning creatives are
+// identified by a naming convention (an "L1C1" marker prefix, applied only within a specific
+// "testing" campaign) rather than by CPI/spend. See winningRule.ts's applyWinningRule.
+export interface WinningNamePatternRule {
+  adNameIncludes: string; // case-insensitive substring match against the ad's name
+  campaignNameIncludes?: string; // case-insensitive substring match against the campaign name; omit to skip this check
+}
+
 export interface EditorPerformanceRow {
   editorName: string;
   businessUnit: string;

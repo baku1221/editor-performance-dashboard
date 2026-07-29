@@ -1,4 +1,4 @@
-import type { WinningRuleConfig, WinningRuleMetric, WinningRuleOperator } from "./types";
+import type { WinningNamePatternRule, WinningRuleConfig, WinningRuleMetric, WinningRuleOperator } from "./types";
 
 function csv(value: string | undefined): string[] {
   if (!value) return [];
@@ -100,6 +100,21 @@ function parseWinningRuleOverrides(value: string | undefined): Record<string, Wi
       operator: operator as WinningRuleOperator,
       value: Number(rawValue),
     };
+  }
+  return map;
+}
+
+// A second, name-based override mechanism alongside parseWinningRuleOverrides above — for
+// business units where "Winning" is identified by a naming CONVENTION (an ad-name marker,
+// confined to one specific campaign) rather than a numeric metric threshold. Format:
+// "Business Unit|adNameSubstring|campaignNameSubstring" (the campaign part is optional — omit
+// it, and its trailing "|", to match on ad name alone).
+function parseWinningNamePatternOverrides(value: string | undefined): Record<string, WinningNamePatternRule> {
+  const map: Record<string, WinningNamePatternRule> = {};
+  for (const entry of csv(value)) {
+    const [businessUnit, adNameIncludes, campaignNameIncludes] = entry.split("|").map((s) => s.trim());
+    if (!businessUnit || !adNameIncludes) continue;
+    map[businessUnit] = { adNameIncludes, campaignNameIncludes: campaignNameIncludes || undefined };
   }
   return map;
 }
@@ -244,6 +259,17 @@ export const config = {
   } satisfies WinningRuleConfig,
   // Per-business-unit overrides of the rule above — see parseWinningRuleOverrides.
   winningRuleOverrides: parseWinningRuleOverrides(process.env.WINNING_RULE_OVERRIDES),
+  // Name-pattern overrides — checked BEFORE winningRuleOverrides/winningRule for a business unit
+  // that has one (see applyWinningRule in winningRule.ts). Pandit Ji identifies its winning
+  // creatives by an "L1C1" ad-name marker, applied only within its "PJ - Install Testing EXC"
+  // campaign — confirmed via a sample of that campaign's real ad names, which are consistently
+  // prefixed "L1C1 "/"l1C1 " (the sheet's own row lacks this prefix; it's added only once an ad is
+  // duplicated into the testing campaign — the same title-matching logic that already handles
+  // Meta's "– Copy" suffix duplicates picks these up too, since it's a pure word addition).
+  winningNamePatternOverrides:
+    Object.keys(parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)).length > 0
+      ? parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)
+      : { "Pandit Ji": { adNameIncludes: "l1c1", campaignNameIncludes: "testing" } },
   // Runs inside the app itself (see instrumentation.ts + services/scheduler.ts) — only fires
   // while a persistent server process is up, which is exactly the hosting model this app needs
   // anyway (see cache/store.ts). Fires every intervalHours since the last sync (manual click or
