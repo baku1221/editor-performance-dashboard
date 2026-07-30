@@ -91,12 +91,15 @@ export interface WinningRuleConfig {
   value: number;
 }
 
-// A wholly different shape of "winning" rule — matched by ad/campaign NAME substring rather than
-// a numeric metric threshold. Used for business units (e.g. Pandit Ji) whose winning creatives are
-// identified by a naming convention (an "L1C1" marker prefix, applied only within a specific
-// "testing" campaign) rather than by CPI/spend. See winningRule.ts's applyWinningRule.
+// A wholly different shape of "winning" rule — matched by ad/campaign NAME rather than a numeric
+// metric threshold. Used for business units whose winning creatives are identified by a naming
+// convention rather than by CPI/spend — e.g. Pandit Ji's "L1C1" marker anywhere in the ad name
+// (adNameIncludes), or Astrotalk/Lumus's "✅" marker specifically at the START of the ad name
+// (adNameStartsWith) — both scoped to one specific campaign via campaignNameIncludes. See
+// winningRule.ts's applyWinningRule.
 export interface WinningNamePatternRule {
-  adNameIncludes: string; // case-insensitive substring match against the ad's name
+  adNameIncludes?: string; // case-insensitive substring match against the ad's name
+  adNameStartsWith?: string; // prefix match against the (trimmed) ad's name — for a literal marker where position matters, not just presence
   campaignNameIncludes?: string; // case-insensitive substring match against the campaign name; omit to skip this check
 }
 

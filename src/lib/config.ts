@@ -107,14 +107,18 @@ function parseWinningRuleOverrides(value: string | undefined): Record<string, Wi
 // A second, name-based override mechanism alongside parseWinningRuleOverrides above — for
 // business units where "Winning" is identified by a naming CONVENTION (an ad-name marker,
 // confined to one specific campaign) rather than a numeric metric threshold. Format:
-// "Business Unit|adNameSubstring|campaignNameSubstring" (the campaign part is optional — omit
-// it, and its trailing "|", to match on ad name alone).
+// "Business Unit|adNamePattern|campaignNameSubstring" (the campaign part is optional — omit it,
+// and its trailing "|", to match on ad name alone). adNamePattern is a plain substring by
+// default (e.g. "L1C1"); prefix it with "^" (e.g. "^✅") to require the ad name to START with it
+// instead — for a literal marker character where position matters, not just presence anywhere.
 function parseWinningNamePatternOverrides(value: string | undefined): Record<string, WinningNamePatternRule> {
   const map: Record<string, WinningNamePatternRule> = {};
   for (const entry of csv(value)) {
-    const [businessUnit, adNameIncludes, campaignNameIncludes] = entry.split("|").map((s) => s.trim());
-    if (!businessUnit || !adNameIncludes) continue;
-    map[businessUnit] = { adNameIncludes, campaignNameIncludes: campaignNameIncludes || undefined };
+    const [businessUnit, adNamePattern, campaignNameIncludes] = entry.split("|").map((s) => s.trim());
+    if (!businessUnit || !adNamePattern) continue;
+    map[businessUnit] = adNamePattern.startsWith("^")
+      ? { adNameStartsWith: adNamePattern.slice(1), campaignNameIncludes: campaignNameIncludes || undefined }
+      : { adNameIncludes: adNamePattern, campaignNameIncludes: campaignNameIncludes || undefined };
   }
   return map;
 }
@@ -266,10 +270,35 @@ export const config = {
   // prefixed "L1C1 "/"l1C1 " (the sheet's own row lacks this prefix; it's added only once an ad is
   // duplicated into the testing campaign — the same title-matching logic that already handles
   // Meta's "– Copy" suffix duplicates picks these up too, since it's a pure word addition).
+  // Lumus and Astrotalk (Foreign) instead mark a winning ad with a "✅" prefix on the ad name
+  // itself, confined to their one already-configured "Install" campaign (both accounts' single
+  // configured campaign — "USA_Lumus_Android_Install_testing-PPP" and "FOREIGN | PPP | Testing -
+  // Install_native_USA_android" — already has "Install" in its name, so no new campaign IDs were
+  // needed, unlike Pandit Ji's separate testing campaign). Confirmed via a real ad in that
+  // Astrotalk campaign: "✅Temptation island | V1 - cut2 | ..." — note the marker was on a CUT,
+  // not that concept's Main, which is exactly the "any version can carry the marker" case
+  // performanceService.ts's per-concept dedup (see DEDUPE_WINNING_BY_CONCEPT_BUSINESS_UNITS) and
+  // progressService.ts's matchVideo (pre-existing "ANY version — Main or Cut — is winning" join)
+  // are both built to handle.
   winningNamePatternOverrides:
     Object.keys(parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)).length > 0
       ? parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)
-      : { "Pandit Ji": { adNameIncludes: "l1c1", campaignNameIncludes: "testing" } },
+      : {
+          "Pandit Ji": { adNameIncludes: "l1c1", campaignNameIncludes: "testing" },
+          Lumus: { adNameStartsWith: "✅", campaignNameIncludes: "install" },
+          Astrotalk: { adNameStartsWith: "✅", campaignNameIncludes: "install" },
+        },
+  // Business units where multiple Cuts of the SAME underlying video shouldn't each count as a
+  // separate "winning creative" — the ✅ marker above is applied per-ad-object, and a Cut is just
+  // a re-edit of the same concept (sometimes the marker lands on a Cut, not its Main, per the
+  // real example above), so counting every marked cut individually would overcount how many
+  // distinct concepts actually won. See performanceService.ts's countWinningCreatives. Scoped to
+  // just Lumus/Astrotalk (not Pandit Ji, Astrotalk Store, etc.) since this is specifically about
+  // the ✅ marker's per-ad-object semantics, not a general policy for every business unit.
+  winningDedupeByConceptBusinessUnits:
+    csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS).length > 0
+      ? csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS)
+      : ["Lumus", "Astrotalk"],
   // Runs inside the app itself (see instrumentation.ts + services/scheduler.ts) — only fires
   // while a persistent server process is up, which is exactly the hosting model this app needs
   // anyway (see cache/store.ts). Fires every intervalHours since the last sync (manual click or

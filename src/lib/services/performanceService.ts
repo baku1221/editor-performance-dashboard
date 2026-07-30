@@ -12,9 +12,34 @@ import { dateWithinFilters, editorMatchesFilter } from "../filters";
 
 const UNMAPPED_LABEL = "Unmapped";
 const ACTIVE_STATUSES = new Set(["ACTIVE"]);
+const DEDUPE_BY_CONCEPT_BUSINESS_UNITS = new Set(config.winningDedupeByConceptBusinessUnits);
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
+}
+
+/** The ad's concept (before the first "|") plus its editor — same grouping key a Main and every
+ * one of its Cuts share, since they're re-edits of the same underlying video. */
+function conceptKey(video: PublishedVideo): string {
+  const concept = video.adName.split("|")[0]?.trim() ?? video.adName;
+  const normalized = concept.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  return `${video.editorName ?? ""}::${normalized}`;
+}
+
+/**
+ * For most business units, every winning ad object counts individually toward "Winning
+ * Creatives" (each Cut is judged on its own CPI/spend, a genuinely distinct number). But for
+ * business units in DEDUPE_BY_CONCEPT_BUSINESS_UNITS, "winning" is a per-ad-object ✅ naming
+ * marker rather than a metric, and a Main plus its Cuts are the same underlying video — if any
+ * one of them (Main OR a Cut) carries the marker, that's one winning concept, not one winning
+ * creative per marked ad object.
+ */
+function countWinningCreatives(videos: PublishedVideo[], businessUnit: string): number {
+  if (!DEDUPE_BY_CONCEPT_BUSINESS_UNITS.has(businessUnit)) {
+    return videos.filter((v) => v.isWinning).length;
+  }
+  const winningConceptKeys = new Set(videos.filter((v) => v.isWinning).map(conceptKey));
+  return winningConceptKeys.size;
 }
 
 /**
@@ -33,7 +58,7 @@ function filterVideos(videos: PublishedVideo[], filters: DashboardFilters): Publ
 }
 
 function buildRow(editorName: string, businessUnit: string, videos: PublishedVideo[]): EditorPerformanceRow {
-  const winningCreatives = videos.filter((v) => v.isWinning).length;
+  const winningCreatives = countWinningCreatives(videos, businessUnit);
   const activeCreatives = videos.filter((v) => ACTIVE_STATUSES.has(v.effectiveStatus)).length;
   // Main only, not Cuts — a Cut is a shorter re-edit of the same underlying video the editor
   // already gets credited for via its Main version; summing both would double-count the work.
@@ -66,8 +91,8 @@ function getAnalysisWindow(): PerformanceSummary["dateRange"] {
   return { from: config.metaAds.insightsSinceDate, to: new Date().toISOString().slice(0, 10) };
 }
 
-function buildSummary(videos: PublishedVideo[], rows: EditorPerformanceRow[]): PerformanceSummary {
-  const winningCreatives = videos.filter((v) => v.isWinning).length;
+function buildSummary(videos: PublishedVideo[], rows: EditorPerformanceRow[], businessUnit: string): PerformanceSummary {
+  const winningCreatives = countWinningCreatives(videos, businessUnit);
   const totalMainAds = videos.filter((v) => v.videoKind === "Main").length;
 
   return {
@@ -123,7 +148,7 @@ export async function getPerformanceData(filters: DashboardFilters): Promise<Per
     }
 
     rows.push(...unitRows);
-    businessUnits.push({ businessUnit, summary: buildSummary(unitVideos, unitRows) });
+    businessUnits.push({ businessUnit, summary: buildSummary(unitVideos, unitRows, businessUnit) });
   }
 
   return { businessUnits, rows, excludedFromAllView: config.excludedFromAllView };

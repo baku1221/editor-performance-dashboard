@@ -57,10 +57,12 @@ export function applyWinningRule(
 
     const namePattern = namePatternOverridesByBusinessUnit[video.businessUnit];
     if (namePattern) {
-      const adNameMatches = video.adName.toLowerCase().includes(namePattern.adNameIncludes.toLowerCase());
+      const adNameLower = video.adName.toLowerCase();
+      const includesMatches = !namePattern.adNameIncludes || adNameLower.includes(namePattern.adNameIncludes.toLowerCase());
+      const startsWithMatches = !namePattern.adNameStartsWith || video.adName.trim().startsWith(namePattern.adNameStartsWith);
       const campaignMatches =
         !namePattern.campaignNameIncludes || video.campaignName.toLowerCase().includes(namePattern.campaignNameIncludes.toLowerCase());
-      const isWinning = adNameMatches && campaignMatches;
+      const isWinning = includesMatches && startsWithMatches && campaignMatches;
       return { ...video, isWinning, winningSource: isWinning ? "rule" : null };
     }
 

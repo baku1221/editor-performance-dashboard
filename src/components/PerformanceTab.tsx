@@ -96,12 +96,18 @@ type SortKey =
   | "mveScore";
 type SortDir = "asc" | "desc";
 
-// mveScore is null for "Unmapped" — treated as lowest-possible so it sorts to the bottom
-// regardless of direction, rather than colliding with real 0-scored editors.
+// "Unmapped" is a catch-all bucket, not a real editor to rank — pinned to the very bottom
+// regardless of sortKey/sortDir rather than letting it sort into position (it otherwise tends to
+// land near the top on count-based columns, since it aggregates every unmatched video).
 function sortRows(rows: ScoredRow[], sortKey: SortKey | null, sortDir: SortDir): ScoredRow[] {
-  if (!sortKey) return rows;
-  const sorted = [...rows].sort((a, b) => (a[sortKey] ?? -1) - (b[sortKey] ?? -1));
-  return sortDir === "desc" ? sorted.reverse() : sorted;
+  const unmapped = rows.filter((r) => r.editorName === "Unmapped");
+  const ranked = rows.filter((r) => r.editorName !== "Unmapped");
+
+  if (!sortKey) return [...ranked, ...unmapped];
+
+  const sorted = [...ranked].sort((a, b) => (a[sortKey] ?? -1) - (b[sortKey] ?? -1));
+  const ordered = sortDir === "desc" ? sorted.reverse() : sorted;
+  return [...ordered, ...unmapped];
 }
 
 function SortableHeader({
@@ -177,7 +183,7 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
   const [selectedEditor, setSelectedEditor] = useState<string | null>(null);
   const [businessUnit, setBusinessUnit] = useState<string>(ALL_UNIT);
   const [editorFilter, setEditorFilter] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey | null>("mainAdsCount");
+  const [sortKey, setSortKey] = useState<SortKey | null>("mveScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   function handleSort(key: SortKey) {
