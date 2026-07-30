@@ -21,7 +21,14 @@ export function SyncButton({ onSynced }: { onSynced: () => void }) {
     setSyncError(null);
     try {
       const res = await fetch("/api/sync", { method: "POST" });
-      const status: SyncStatus = await res.json();
+      const body = await res.json();
+      if (!res.ok) {
+        // Non-admin (see /api/sync's POST handler) — the button stays visible to everyone, same
+        // pattern as "+ Add editor", but the action itself is server-rejected with a clear reason.
+        setSyncError(body.error ?? "Sync failed.");
+        return;
+      }
+      const status = body as SyncStatus;
       await mutate(status, { revalidate: false });
       onSynced();
     } catch {
