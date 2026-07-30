@@ -11,6 +11,7 @@ import {
   normalizeEditorName,
   matchEditorBySegmentScan,
   matchVideoKindByCutMention,
+  matchVideoKindByHookNumber,
 } from "../services/editorTitleParser";
 import { progressRepository } from "../repositories/progressRepository";
 import { publishedVideoRepository } from "../repositories/publishedVideoRepository";
@@ -71,8 +72,17 @@ function conceptSegment(title: string): string {
   return title.split("|")[0]?.trim() ?? "";
 }
 
-/** Same Main/Cut resolution used for the final PublishedVideo — factored out so matchMetaAd can compare kinds, not just words. */
-function resolveVideoKind(title: string): "Main" | "Cut" {
+/**
+ * Same Main/Cut resolution used for the final PublishedVideo — factored out so matchMetaAd can
+ * compare kinds, not just words. Pandit Ji's "hook variant" convention (see
+ * matchVideoKindByHookNumber) is checked first and only for that business unit — every other
+ * business unit keeps using the general "V1 - Main | V2 - Cut" / hookline-cut-mention convention.
+ */
+function resolveVideoKind(title: string, businessUnit: string): "Main" | "Cut" {
+  if (businessUnit === "Pandit Ji") {
+    const hookKind = matchVideoKindByHookNumber(title);
+    if (hookKind) return hookKind;
+  }
   return parseVideoKindFromAdTitle(title) ?? matchVideoKindByCutMention(title);
 }
 
@@ -148,7 +158,7 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
     metaIndex.byNormalizedTitle.get(normalizeTitleForMatching(row.name)) ??
     (() => {
       const rowWords = titleWordSet(row.name);
-      const rowKind = resolveVideoKind(row.name);
+      const rowKind = resolveVideoKind(row.name, row.businessUnit);
       // Scoped to the same business unit AND the same Main/Cut kind — confirmed real bug
       // otherwise: on the Astrotalk Store account, a Cut's title is *exactly* its Main's title
       // plus the word "cut"/"cuts" (e.g. "...PPP" vs "...PPP|cuts"), which makes the Main title a
@@ -160,7 +170,7 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
       const matches = metaIndex.all.filter(
         (rec) =>
           rec.businessUnit === row.businessUnit &&
-          resolveVideoKind(rec.adName) === rowKind &&
+          resolveVideoKind(rec.adName, rec.businessUnit) === rowKind &&
           isSubsetEitherWay(titleWordSet(rec.adName), rowWords)
       );
       const uniqueIds = new Set(matches.map((rec) => rec.id));
@@ -207,7 +217,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
 
     const rawEditorName = row.editorName || parseEditorFromAdTitle(row.name);
     const editorName = normalizeEditorName(rawEditorName, roster) ?? matchEditorBySegmentScan(row.name, roster);
-    const videoKind = resolveVideoKind(row.name);
+    const videoKind = resolveVideoKind(row.name, row.businessUnit);
     const durationSeconds = row.driveLink ? pickDurationForRow(row.name, filesByLink.get(row.driveLink) ?? []) : null;
     const sheetCreatedDate = row.dateMade || (row.sourceMonth ? `${row.sourceMonth}-01` : "");
 

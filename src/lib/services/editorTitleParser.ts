@@ -49,6 +49,35 @@ export function parseVideoKindFromAdTitle(adTitle: string): "Main" | "Cut" | nul
   return null;
 }
 
+const HOOK_STAGE_PATTERN = /\bh\s*(\d+)\b/i;
+const WITHOUT_HOOK_PATTERN = /\bwithout\s+hook\b/i;
+
+/**
+ * Pandit Ji's "hook variant" convention: several videos are the SAME underlying script, differing
+ * only in their opening hook line — confirmed real case (Sutikshan, "Shruti Mumbai" concept): "V1 -
+ * H1 : ...", "V1 - H2 : ...", up through H5, plus a "V1 - Without hook" variant — six rows, one
+ * script. H1 is the intended primary hook (Main); H2 onward and "Without hook" are alternate hook
+ * cuts of the same video, not separate pieces of new work, so they count as Cut. Scoped to the
+ * stage segment (same segments[1] the "V1 - Main"/"V1 - Cut" convention reads) so a title without
+ * this convention at all can't misfire on some unrelated "h" + digit elsewhere. Only meant to be
+ * called for the Pandit Ji business unit (see resolveVideoKind in syncService.ts) — other business
+ * units don't use this hook-numbering scheme at all.
+ */
+export function matchVideoKindByHookNumber(adTitle: string): "Main" | "Cut" | null {
+  const segments = adTitle
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  if (segments.length < 3) return null;
+  const stageSegment = segments[1] ?? "";
+
+  const hookMatch = stageSegment.match(HOOK_STAGE_PATTERN);
+  if (hookMatch?.[1]) return Number(hookMatch[1]) === 1 ? "Main" : "Cut";
+  if (WITHOUT_HOOK_PATTERN.test(stageSegment)) return "Cut";
+  return null;
+}
+
 const CUT_MENTION = /\bcuts?\b/i;
 
 /**
