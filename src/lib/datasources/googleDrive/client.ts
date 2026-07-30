@@ -92,6 +92,20 @@ async function videoFilesForDriveLink(driveLink: string): Promise<DriveVideoFile
   }
 }
 
+// driveLink -> resolved video files, cached for the process lifetime (same pattern as
+// googleSheets/client.ts's gidCacheBySheet) — a video's duration never changes once uploaded, so
+// there's no reason to re-fetch it on every sync. Confirmed real case: as the number of
+// configured drive-creative sheets grew (7 sheets, 1000+ unique folders after adding Pandit Ji),
+// a single sync's Drive lookups grew large enough to trip Drive API rate limiting partway
+// through — once that happens, EVERY remaining folder in the batch silently degrades to null
+// duration (the existing per-folder try/catch isolates one bad folder, but can't help once the
+// rate limit itself kicks in for the rest of the run). Caching means only genuinely NEW links
+// need fetching on the second and every subsequent sync, cutting the volume that could ever
+// trip the limit again. Only successful non-empty lookups are cached (see below) — a link that
+// resolves to zero files (genuinely no video, e.g. a static-image row, OR a transient failure)
+// is deliberately left uncached so it's retried fresh next sync rather than permanently frozen.
+const durationCacheByLink = new Map<string, DriveVideoFile[]>();
+
 /**
  * Resolves every video file (name + duration) found in each Drive folder link, keyed by the
  * original link string — a folder shared by multiple sheet rows returns multiple entries, and
@@ -104,12 +118,24 @@ export async function fetchVideoFilesForDriveLinks(driveLinks: string[]): Promis
   if (!isGoogleDriveConfigured()) return results;
 
   const uniqueLinks = Array.from(new Set(driveLinks));
+  const uncachedLinks: string[] = [];
 
-  for (let i = 0; i < uniqueLinks.length; i += CONCURRENCY) {
-    const batch = uniqueLinks.slice(i, i + CONCURRENCY);
+  for (const link of uniqueLinks) {
+    const cached = durationCacheByLink.get(link);
+    if (cached) {
+      results.set(link, cached);
+    } else {
+      uncachedLinks.push(link);
+    }
+  }
+
+  for (let i = 0; i < uncachedLinks.length; i += CONCURRENCY) {
+    const batch = uncachedLinks.slice(i, i + CONCURRENCY);
     const filesPerLink = await Promise.all(batch.map((link) => videoFilesForDriveLink(link)));
     batch.forEach((link, index) => {
-      results.set(link, filesPerLink[index] ?? []);
+      const files = filesPerLink[index] ?? [];
+      if (files.length > 0) durationCacheByLink.set(link, files);
+      results.set(link, files);
     });
   }
 
