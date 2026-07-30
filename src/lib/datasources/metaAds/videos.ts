@@ -13,7 +13,7 @@ interface MetaAd {
   name: string;
   created_time: string;
   effective_status: string;
-  campaign?: { name: string };
+  campaign?: { id: string; name: string };
   creative?: { id?: string }; // shallow on purpose — see fetchCreativeVideoIds
 }
 
@@ -46,6 +46,7 @@ export interface MetaAdRecord {
   id: string;
   accountId: string;
   businessUnit: string;
+  campaignId: string;
   campaignName: string;
   adName: string;
   createdDate: string;
@@ -85,7 +86,7 @@ export interface MetaAdsIndex {
 // error surfaced, so "Total Videos Submitted" quietly undercounts). Fetching creative details
 // as a separate batched-by-id call (like fetchVideoDurations below) isolates that risk to just
 // the creative/duration lookup instead of losing ads.
-const AD_FIELDS = ["id", "name", "created_time", "effective_status", "campaign{name}", "creative{id}"].join(",");
+const AD_FIELDS = ["id", "name", "created_time", "effective_status", "campaign{id,name}", "creative{id}"].join(",");
 const INSIGHT_FIELDS = ["ad_id", "spend", "impressions", "ctr", "cpm", "cpc", "actions"].join(",");
 
 /**
@@ -247,6 +248,7 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
         id: ad.id,
         accountId,
         businessUnit: config.metaAds.accountLabels[accountId] ?? accountId,
+        campaignId: ad.campaign?.id ?? "",
         campaignName: ad.campaign?.name ?? "",
         adName: ad.name,
         createdDate: config.createdDateOverrides[ad.id] ?? normalizeToIsoDate(ad.created_time),

@@ -51,6 +51,7 @@ export interface PublishedVideo {
   id: string; // Meta ad id when takenLive, else a stable id derived from the sheet row
   accountId: string | null; // Meta ad account id — null when not takenLive
   businessUnit: string; // human label, e.g. "Lumus" | "Astrotalk" | "Astrotalk Store"
+  campaignId: string; // Meta's raw campaign id — '' when not takenLive; campaignName is the human label, this is for exact-ID matching (e.g. winningCampaignIdOverrides)
   campaignName: string;
   adName: string;
   editorName: string | null; // null = neither the sheet's Editor column nor title parsing matched the roster

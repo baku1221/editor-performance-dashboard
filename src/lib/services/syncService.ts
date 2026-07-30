@@ -17,6 +17,7 @@ import { progressRepository } from "../repositories/progressRepository";
 import { publishedVideoRepository } from "../repositories/publishedVideoRepository";
 import { editorRosterRepository } from "../repositories/editorRosterRepository";
 import { applyWinningRule } from "./winningRule";
+import { backfillDatabaseSheet } from "./sheetBackfillService";
 
 function titleWordSet(title: string): Set<string> {
   return new Set(normalizeTitleForMatching(title).split(" ").filter(Boolean));
@@ -244,6 +245,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
         id: matched.id,
         accountId: matched.accountId,
         businessUnit: row.businessUnit,
+        campaignId: matched.campaignId,
         campaignName: matched.campaignName,
         adName: matched.adName,
         editorName,
@@ -271,6 +273,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       id: `sheet:${row.businessUnit}:${normalizeTitleForMatching(row.name)}`,
       accountId: null,
       businessUnit: row.businessUnit,
+      campaignId: "",
       campaignName: "",
       adName: row.name,
       editorName,
@@ -302,7 +305,14 @@ export async function recomputeWinningFlags(): Promise<void> {
     publishedVideoRepository.getManualOverrides(),
   ]);
 
-  const flagged = applyWinningRule(videos, config.winningRule, overrides, config.winningRuleOverrides, config.winningNamePatternOverrides);
+  const flagged = applyWinningRule(
+    videos,
+    config.winningRule,
+    overrides,
+    config.winningRuleOverrides,
+    config.winningNamePatternOverrides,
+    config.winningCampaignIdOverrides
+  );
   await publishedVideoRepository.replaceAll(flagged);
 }
 
@@ -363,6 +373,15 @@ export async function runSync(): Promise<SyncStatus> {
 
   // The winning rule (and any manual overrides) apply regardless of which source just refreshed.
   await recomputeWinningFlags();
+
+  // Best-effort, non-fatal — a backfill hiccup shouldn't fail the sync itself (this sheet is a
+  // convenience persistence layer, not the primary data source). No-op entirely if
+  // SHEET_BACKFILL_WEBHOOK_URL isn't configured.
+  try {
+    await backfillDatabaseSheet(await publishedVideoRepository.getAll());
+  } catch (err) {
+    console.error("[sheetBackfill] Backfill failed:", err);
+  }
 
   store.syncStatus.lastSyncedAt = fetchedAt;
   return store.syncStatus;

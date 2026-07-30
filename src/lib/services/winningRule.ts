@@ -42,18 +42,28 @@ function compare(value: number, operator: WinningRuleConfig["operator"], thresho
  * `namePatternOverridesByBusinessUnit` is checked FIRST, ahead of the metric-based rule/override —
  * for a business unit like Pandit Ji, "Winning" isn't a metric threshold at all, it's an ad-name
  * naming convention (see WinningNamePatternRule's doc comment in types.ts).
+ *
+ * `campaignIdOverridesByBusinessUnit` is a second, independent signal ORed on top of whichever
+ * rule above applies — an ad simply being present in one of the listed campaign IDs is itself
+ * enough to be "Winning", regardless of ad name or metric. Used for Lumus/Astrotalk's "graduated
+ * from testing to scaling" signal: once an ad gets promoted into a scaling campaign, that
+ * promotion IS the winning signal, on top of (not instead of) the ✅ ad-name marker.
  */
 export function applyWinningRule(
   videos: PublishedVideo[],
   rule: WinningRuleConfig,
   manualOverrides: Map<string, boolean>,
   ruleOverridesByBusinessUnit: Record<string, WinningRuleConfig> = {},
-  namePatternOverridesByBusinessUnit: Record<string, WinningNamePatternRule> = {}
+  namePatternOverridesByBusinessUnit: Record<string, WinningNamePatternRule> = {},
+  campaignIdOverridesByBusinessUnit: Record<string, string[]> = {}
 ): PublishedVideo[] {
   return videos.map((video) => {
     if (manualOverrides.has(video.id)) {
       return { ...video, isWinning: manualOverrides.get(video.id) ?? false, winningSource: "manual" };
     }
+
+    const scalingCampaignIds = campaignIdOverridesByBusinessUnit[video.businessUnit];
+    const isInScalingCampaign = Boolean(video.campaignId && scalingCampaignIds?.includes(video.campaignId));
 
     const namePattern = namePatternOverridesByBusinessUnit[video.businessUnit];
     if (namePattern) {
@@ -62,8 +72,12 @@ export function applyWinningRule(
       const startsWithMatches = !namePattern.adNameStartsWith || video.adName.trim().startsWith(namePattern.adNameStartsWith);
       const campaignMatches =
         !namePattern.campaignNameIncludes || video.campaignName.toLowerCase().includes(namePattern.campaignNameIncludes.toLowerCase());
-      const isWinning = includesMatches && startsWithMatches && campaignMatches;
+      const isWinning = (includesMatches && startsWithMatches && campaignMatches) || isInScalingCampaign;
       return { ...video, isWinning, winningSource: isWinning ? "rule" : null };
+    }
+
+    if (isInScalingCampaign) {
+      return { ...video, isWinning: true, winningSource: "rule" };
     }
 
     const effectiveRule = ruleOverridesByBusinessUnit[video.businessUnit] ?? rule;

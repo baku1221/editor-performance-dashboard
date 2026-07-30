@@ -123,6 +123,25 @@ function parseWinningNamePatternOverrides(value: string | undefined): Record<str
   return map;
 }
 
+// A THIRD override mechanism, independent of the two above and ORed on top of whichever one
+// applies — "Winning" simply because the ad exists in one of these specific campaign IDs,
+// regardless of ad name or metric. Used for Lumus/Astrotalk's "graduated from testing to
+// scaling" signal: once the team promotes a winning ad from its testing campaign into a scaling
+// campaign, that promotion is itself the signal — same testing-vs-scaling economics
+// (WINNING_RULE_OVERRIDES) don't capture a decision made by a human, not a formula. Format:
+// "Business Unit|campaignId1|campaignId2,Other Unit|campaignId1".
+function parseWinningCampaignIdOverrides(value: string | undefined): Record<string, string[]> {
+  const map: Record<string, string[]> = {};
+  for (const entry of csv(value)) {
+    const parts = entry.split("|").map((s) => s.trim()).filter(Boolean);
+    const businessUnit = parts[0];
+    const campaignIds = parts.slice(1);
+    if (!businessUnit || campaignIds.length === 0) continue;
+    map[businessUnit] = campaignIds;
+  }
+  return map;
+}
+
 export const config = {
   googleSheets: {
     // Two supported auth modes: a plain API key (works for link-shared/public sheets, no
@@ -299,6 +318,18 @@ export const config = {
     csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS).length > 0
       ? csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS)
       : ["Lumus", "Astrotalk"],
+  // See parseWinningCampaignIdOverrides. Lumus's two scaling campaigns ("USA_lumus_android_
+  // Scaling PPP CBO_Start_Journey" and "USA_Lumus_APP_iOS_PPP_StartJourney") + Astrotalk's one
+  // ("Native_Foreign | PPP | Purchase - Android CBO (Just for testing) – Start Journey_native_
+  // USA") — these campaign IDs must also be added to META_CAMPAIGN_IDS or their ads never get
+  // fetched at all, so this check would never have anything to match against.
+  winningCampaignIdOverrides:
+    Object.keys(parseWinningCampaignIdOverrides(process.env.WINNING_CAMPAIGN_ID_OVERRIDES)).length > 0
+      ? parseWinningCampaignIdOverrides(process.env.WINNING_CAMPAIGN_ID_OVERRIDES)
+      : {
+          Lumus: ["120242098103810068", "120245920735870068"],
+          Astrotalk: ["120246969425560130"],
+        },
   // Runs inside the app itself (see instrumentation.ts + services/scheduler.ts) — only fires
   // while a persistent server process is up, which is exactly the hosting model this app needs
   // anyway (see cache/store.ts). Fires every intervalHours since the last sync (manual click or
@@ -317,6 +348,14 @@ export const config = {
     // timezone the server process happens to run in.
     leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "23:45",
     leaderboardTimezone: process.env.SLACK_LEADERBOARD_TIMEZONE ?? "Asia/Kolkata",
+  },
+  // Backfills a Google Sheet "database" (one tab per business unit) after every sync — an Apps
+  // Script Web App bound to that sheet, not the Sheets API directly (no service-account/OAuth
+  // setup needed; the script already runs under the sheet owner's own permissions). Disabled
+  // (no-op) whenever SHEET_BACKFILL_WEBHOOK_URL is unset. See services/sheetBackfillService.ts.
+  sheetBackfill: {
+    webhookUrl: process.env.SHEET_BACKFILL_WEBHOOK_URL ?? "",
+    secret: process.env.SHEET_BACKFILL_SECRET ?? "",
   },
 };
 
