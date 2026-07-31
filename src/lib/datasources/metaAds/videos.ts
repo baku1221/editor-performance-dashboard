@@ -76,6 +76,17 @@ export interface MetaAdsIndex {
    * byNormalizedTitle; value is the minimum created_time seen across every ad sharing that key.
    */
   earliestCreatedByNormalizedTitle: Map<string, string>;
+  /**
+   * The team's own "promote a winner" workflow is to duplicate the ad into a scaling campaign
+   * (confirmed via the Marketing API directly: 43+ Astrotalk concepts currently have a copy in
+   * BOTH the testing and scaling campaigns, often with an identical name up to the trailing
+   * "Copy"/"Copy N" that normalizeTitleForMatching already strips) — so a single concept has
+   * MULTIPLE ad objects with different campaign ids, and byNormalizedTitle's last-write-wins
+   * can silently keep the testing duplicate over the scaling one. This collects every campaign id
+   * seen across every ad sharing a normalized title, so a concept can be recognized as "present in
+   * the scaling campaign" regardless of which duplicate byNormalizedTitle happened to keep.
+   */
+  campaignIdsByNormalizedTitle: Map<string, Set<string>>;
   all: MetaAdRecord[];
 }
 
@@ -232,6 +243,7 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
   const byAdId = new Map<string, MetaAdRecord>();
   const byNormalizedTitle = new Map<string, MetaAdRecord>();
   const earliestCreatedByNormalizedTitle = new Map<string, string>();
+  const campaignIdsByNormalizedTitle = new Map<string, Set<string>>();
   const all: MetaAdRecord[] = [];
 
   for (const { accountId, ads, insights } of perAccount) {
@@ -270,9 +282,14 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
       if (!existingEarliest || record.createdDate < existingEarliest) {
         earliestCreatedByNormalizedTitle.set(key, record.createdDate);
       }
+      if (record.campaignId) {
+        const campaignIds = campaignIdsByNormalizedTitle.get(key) ?? new Set<string>();
+        campaignIds.add(record.campaignId);
+        campaignIdsByNormalizedTitle.set(key, campaignIds);
+      }
       all.push(record);
     }
   }
 
-  return { byAdId, byNormalizedTitle, earliestCreatedByNormalizedTitle, all };
+  return { byAdId, byNormalizedTitle, earliestCreatedByNormalizedTitle, campaignIdsByNormalizedTitle, all };
 }

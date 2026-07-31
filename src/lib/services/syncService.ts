@@ -242,11 +242,17 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       // that isn't organized by month).
       const createdDate = sheetCreatedDate || metaCreatedDate;
 
+      const allCampaignIds = Array.from(
+        metaIndex.campaignIdsByNormalizedTitle.get(normalizeTitleForMatching(row.name)) ??
+          (matched.campaignId ? [matched.campaignId] : [])
+      );
+
       const video: PublishedVideo = {
         id: matched.id,
         accountId: matched.accountId,
         businessUnit: row.businessUnit,
         campaignId: matched.campaignId,
+        allCampaignIds,
         campaignName: matched.campaignName,
         adName: matched.adName,
         editorName,
@@ -275,6 +281,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       accountId: null,
       businessUnit: row.businessUnit,
       campaignId: "",
+      allCampaignIds: [],
       campaignName: "",
       adName: row.name,
       editorName,
@@ -423,7 +430,13 @@ async function runSyncExclusive(options: { skipMeta?: boolean }): Promise<SyncSt
     metaIndex =
       metaIndexResult.status === "fulfilled" && metaIndexResult.value
         ? metaIndexResult.value
-        : { byAdId: new Map(), byNormalizedTitle: new Map(), earliestCreatedByNormalizedTitle: new Map(), all: [] };
+        : {
+            byAdId: new Map(),
+            byNormalizedTitle: new Map(),
+            earliestCreatedByNormalizedTitle: new Map(),
+            campaignIdsByNormalizedTitle: new Map(),
+            all: [],
+          };
 
     store.syncStatus.sources.metaAds =
       metaIndexResult.status === "fulfilled"

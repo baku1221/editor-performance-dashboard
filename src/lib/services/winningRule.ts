@@ -50,6 +50,12 @@ function compare(value: number, operator: WinningRuleConfig["operator"], thresho
  * metric-based rule below, since "present in the scaling campaign" is a complete, deliberate
  * yes/no signal on its own (the team's workflow is to move/copy a winning ad into the scaling
  * campaign once proven, so campaign membership already IS the ground truth).
+ *
+ * Checked against `video.allCampaignIds`, NOT `video.campaignId` — the promotion workflow
+ * duplicates the ad into the scaling campaign rather than moving it, so a single concept can have
+ * several ad objects (one per campaign) and campaignId only reflects whichever duplicate got
+ * matched. Using just campaignId silently missed the scaling copy whenever the OTHER duplicate got
+ * matched instead (confirmed real case: 43+ Astrotalk concepts have a copy in both simultaneously).
  */
 export function applyWinningRule(
   videos: PublishedVideo[],
@@ -66,7 +72,7 @@ export function applyWinningRule(
 
     const scalingCampaignIds = campaignIdOverridesByBusinessUnit[video.businessUnit];
     const hasCampaignOnlyRule = scalingCampaignIds !== undefined;
-    const isInScalingCampaign = Boolean(video.campaignId && scalingCampaignIds?.includes(video.campaignId));
+    const isInScalingCampaign = Boolean(scalingCampaignIds && video.allCampaignIds.some((id) => scalingCampaignIds.includes(id)));
 
     const namePattern = namePatternOverridesByBusinessUnit[video.businessUnit];
     if (namePattern) {

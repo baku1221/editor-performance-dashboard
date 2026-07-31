@@ -26,6 +26,7 @@ const COL = {
   durationSeconds: 18,
   winning: 19,
   winningSource: 20,
+  allCampaignIds: 21, // appended after the original 21 columns — see sheetBackfillService.ts HEADERS
 } as const;
 
 function cell(row: string[], index: number): string {
@@ -44,7 +45,13 @@ function numberOrNull(value: string): number | null {
 }
 
 function emptyIndex(): MetaAdsIndex {
-  return { byAdId: new Map(), byNormalizedTitle: new Map(), earliestCreatedByNormalizedTitle: new Map(), all: [] };
+  return {
+    byAdId: new Map(),
+    byNormalizedTitle: new Map(),
+    earliestCreatedByNormalizedTitle: new Map(),
+    campaignIdsByNormalizedTitle: new Map(),
+    all: [],
+  };
 }
 
 /**
@@ -109,6 +116,19 @@ export async function fetchMetaIndexFromBackfillSheet(businessUnits: string[]): 
       const existingEarliest = index.earliestCreatedByNormalizedTitle.get(key);
       if (!existingEarliest || record.createdDate < existingEarliest) {
         index.earliestCreatedByNormalizedTitle.set(key, record.createdDate);
+      }
+      // "All Campaign IDs" is pipe-joined by sheetBackfillService.ts's toRow — a row written
+      // before that column existed reads back as "", so it falls back to just this row's own
+      // campaignId (better than nothing, though it can't recover a sibling duplicate's campaign
+      // until the next live Meta sync rewrites this row with the full set).
+      const allCampaignIdsCell = cell(row, COL.allCampaignIds);
+      const rowCampaignIds = allCampaignIdsCell
+        ? allCampaignIdsCell.split("|").map((s) => s.trim()).filter(Boolean)
+        : record.campaignId
+          ? [record.campaignId]
+          : [];
+      if (rowCampaignIds.length > 0) {
+        index.campaignIdsByNormalizedTitle.set(key, new Set(rowCampaignIds));
       }
       index.all.push(record);
     }

@@ -52,6 +52,14 @@ export interface PublishedVideo {
   accountId: string | null; // Meta ad account id — null when not takenLive
   businessUnit: string; // human label, e.g. "Lumus" | "Astrotalk" | "Astrotalk Store"
   campaignId: string; // Meta's raw campaign id — '' when not takenLive; campaignName is the human label, this is for exact-ID matching (e.g. winningCampaignIdOverrides)
+  // Every campaign id seen across every live Meta ad sharing this concept+stage's normalized
+  // title (see normalizeTitleForMatching) — not just campaignId's single matched ad. The team's
+  // "promote a winner" workflow duplicates the ad into a scaling campaign rather than moving it,
+  // so one concept can have several ad objects (one per campaign); campaignId only reflects
+  // whichever duplicate matchMetaAd happened to link, which is why winningRule's scaling-campaign
+  // check must consult this instead — confirmed real case: 43+ Astrotalk concepts have a copy in
+  // both campaigns simultaneously.
+  allCampaignIds: string[];
   campaignName: string;
   adName: string;
   editorName: string | null; // null = neither the sheet's Editor column nor title parsing matched the roster

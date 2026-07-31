@@ -25,6 +25,12 @@ const HEADERS = [
   "Duration (s)",
   "Winning",
   "Winning Source",
+  // Appended, not inserted — keeps every column before it positionally stable for old rows that
+  // predate this field (backfillReader.ts reads columns by fixed index; an old row simply reads
+  // this one back as "" until it's next overwritten by a live sync). Pipe-joined since a Meta
+  // campaign id is always numeric — no escaping/quoting concerns like a comma-joined value reread
+  // back through this sheet's CSV export would have.
+  "All Campaign IDs",
 ];
 
 function toRow(video: PublishedVideo): Array<string | number> {
@@ -50,6 +56,7 @@ function toRow(video: PublishedVideo): Array<string | number> {
     video.durationSeconds ?? "",
     video.isWinning ? "Yes" : "No",
     video.winningSource ?? "",
+    video.allCampaignIds.join("|"),
   ];
 }
 
