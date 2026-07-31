@@ -29,6 +29,36 @@ export function parseEditorFromAdTitle(adTitle: string): string | null {
   return token || null;
 }
 
+// The script writer's name is always the word immediately before a trailing "PPP" — e.g.
+// "Parul - SYAT - Samridhi-PPP", "Pratigya -SYAT - Riya-PPP – Copy", but real titles are
+// inconsistent about whether there's a space around that last dash too (confirmed real cases:
+// "Preyansha -PPP" and "Preyansha - PPP" alongside the more common glued "Preyensha-PPP") — \s*
+// tolerates all three. Deliberately a plain regex search rather than DASH_SEPARATOR's positional
+// token split: the OTHER dashes in this segment are inconsistently spaced too (e.g. "Pratigya
+// -SYAT" has no space after its own dash, which glues it into one token and shifts every later
+// index), but searching for the "-PPP" glue directly sidesteps that instead of counting tokens.
+const SCRIPT_WRITER_PPP_PATTERN = /([a-z]+)\s*-\s*ppp\b/i;
+
+/**
+ * Fallback for when a video has no matching Progress Tracker sheet row to read "Script By" from
+ * (see findScriptWriter in performanceService.ts) — the naming convention above means the name is
+ * usually recoverable straight from the ad title itself. Titles without the "-PPP" convention at
+ * all (e.g. Astrotalk Store's bare "| PPP |" segment, with nothing glued to it) correctly return
+ * null rather than a false match.
+ */
+export function parseScriptWriterFromAdTitle(adTitle: string): string | null {
+  const segments = adTitle
+    .split("|")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const lastSegment = segments[segments.length - 1];
+  if (!lastSegment) return null;
+
+  const match = lastSegment.match(SCRIPT_WRITER_PPP_PATTERN);
+  return match?.[1] ?? null;
+}
+
 /**
  * The middle "|"-delimited segment (e.g. "V1 - Main", "V2 - Cut 1") identifies
  * whether an ad is the primary edit or a shorter derivative cut. Only read

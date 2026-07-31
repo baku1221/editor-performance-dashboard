@@ -15,6 +15,7 @@ import { progressRepository } from "../repositories/progressRepository";
 import { dateWithinFilters, editorMatchesFilter } from "../filters";
 import { normalizeTitleForMatching } from "../datasources/googleSheets/driveCreatives";
 import { COHORT_TO_BUSINESS_UNIT, firstSegment } from "./progressService";
+import { parseScriptWriterFromAdTitle } from "./editorTitleParser";
 
 const UNMAPPED_LABEL = "Unmapped";
 const ACTIVE_STATUSES = new Set(["ACTIVE"]);
@@ -188,7 +189,12 @@ export async function getEditorDetail(
 
 /** The Progress Tracker item this video's script came from — same editor + concept-title match
  * progressService.ts's matchVideo does in the opposite direction (sheet row -> Meta video),
- * reversed here (Meta video -> sheet row) since MainAdRow needs the script writer's name. */
+ * reversed here (Meta video -> sheet row) since MainAdRow needs the script writer's name. Falls
+ * back to parsing it straight off the ad title's own naming convention (see
+ * parseScriptWriterFromAdTitle) when no sheet row matches — confirmed real gap: a video can be
+ * live on Meta with no corresponding Progress Tracker row at all (never logged there, or logged
+ * under a slightly different concept/editor spelling that fails the exact match above), even
+ * though the script writer's name is sitting right there in the ad title. */
 function findScriptWriter(video: PublishedVideo, progressItems: ProgressItem[]): string | null {
   const targetConcept = normalizeTitleForMatching(firstSegment(video.adName));
   const match = progressItems.find(
@@ -197,7 +203,7 @@ function findScriptWriter(video: PublishedVideo, progressItems: ProgressItem[]):
       item.editorName === video.editorName &&
       normalizeTitleForMatching(firstSegment(item.videoName)) === targetConcept
   );
-  return match?.scriptWriter ?? null;
+  return match?.scriptWriter ?? parseScriptWriterFromAdTitle(video.adName);
 }
 
 /** Every Main-kind ad for one business unit across all editors — the "Total Unique Ads (Main)"
