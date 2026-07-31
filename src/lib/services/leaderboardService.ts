@@ -38,16 +38,17 @@ export async function getTopEditorsByMainAds(from: string, to: string, topN?: nu
 }
 
 /**
- * Total videos (Main + Cut, same "videosSubmitted" definition as the Performance tab) made on
- * `date`, per business unit — unlike getTopEditorsByMainAds, this isn't restricted to Main-only
- * or to the excludedFromAllView set, since it's reported per business unit rather than combined.
+ * Total videos (Main + Cut, same "videosSubmitted" definition as the Performance tab) made within
+ * [from, to] inclusive, per business unit — unlike getTopEditorsByMainAds, this isn't restricted
+ * to Main-only or to the excludedFromAllView set, since it's reported per business unit rather
+ * than combined. Pass the same date for `from`/`to` for a single day's totals.
  */
-export async function getBusinessUnitVideoTotals(date: string): Promise<Record<string, number>> {
+export async function getBusinessUnitVideoTotals(from: string, to: string): Promise<Record<string, number>> {
   const videos = await publishedVideoRepository.getAll();
   const totals: Record<string, number> = {};
 
   for (const v of videos) {
-    if (v.createdDate !== date) continue;
+    if (v.createdDate < from || v.createdDate > to) continue;
     totals[v.businessUnit] = (totals[v.businessUnit] ?? 0) + 1;
   }
 
@@ -69,7 +70,7 @@ export async function getDailyLeaderboards(monthTopN = 5): Promise<DailyLeaderbo
   const [today, month, businessUnitTotals] = await Promise.all([
     getTopEditorsByMainAds(date, date), // full list — everyone who made something today
     getTopEditorsByMainAds(monthStart, date, monthTopN),
-    getBusinessUnitVideoTotals(date),
+    getBusinessUnitVideoTotals(date, date),
   ]);
 
   return { date, today, month, businessUnitTotals };

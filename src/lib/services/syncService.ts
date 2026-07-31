@@ -199,6 +199,31 @@ function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdId
 }
 
 /**
+ * Among every ad object sharing this concept+stage's normalized title (see
+ * MetaAdsIndex.recordsByNormalizedTitle), prefers whichever one is in a TESTING campaign — i.e.
+ * NOT one of the business unit's configured scaling campaigns (winningCampaignIdOverrides) — for
+ * the video's displayed spend/CPI/impressions/etc. That's the specific campaign the team judges a
+ * creative's CPI against; scaling is purely "this one graduated" (already captured separately via
+ * allCampaignIds/winningRule), so its own often-different CPI shouldn't silently override the
+ * testing number. Confirmed real case: a Lumus cut had 4 duplicate ad objects across testing and
+ * scaling campaigns with CPIs ranging 279–615 — showing whichever one matchMetaAd happened to
+ * land on meant the displayed CPI didn't match what the team sees when they look up that specific
+ * ad in Ads Manager. Ties among multiple testing-campaign duplicates (e.g. Lumus has separate
+ * Android and iOS testing campaigns) go to whichever spent the most, as the more likely primary
+ * one rather than a near-zero-spend leftover. Falls back to `matched` itself when no testing-
+ * campaign duplicate exists at all (nothing else to prefer).
+ */
+function pickMetricsRecord(matched: MetaAdRecord, candidates: MetaAdRecord[], businessUnit: string): MetaAdRecord {
+  const scalingCampaignIds = config.winningCampaignIdOverrides[businessUnit];
+  if (!scalingCampaignIds || scalingCampaignIds.length === 0) return matched;
+
+  const testingCandidates = candidates.filter((r) => !scalingCampaignIds.includes(r.campaignId));
+  if (testingCandidates.length === 0) return matched;
+
+  return testingCandidates.reduce((best, r) => (r.spend > best.spend ? r : best));
+}
+
+/**
  * Builds every video from the "<Business> AI Creatives" sheets (the primary source — see
  * types.ts's PublishedVideo doc comment) and enriches each with live Meta data when a match is
  * found. Best-effort on both sides: a sheet-fetch failure here throws (no primary data at all
@@ -242,10 +267,15 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       // that isn't organized by month).
       const createdDate = sheetCreatedDate || metaCreatedDate;
 
+      const normalizedKey = normalizeTitleForMatching(row.name);
+      const duplicateCandidates = metaIndex.recordsByNormalizedTitle.get(normalizedKey) ?? [matched];
       const allCampaignIds = Array.from(
-        metaIndex.campaignIdsByNormalizedTitle.get(normalizeTitleForMatching(row.name)) ??
-          (matched.campaignId ? [matched.campaignId] : [])
+        metaIndex.campaignIdsByNormalizedTitle.get(normalizedKey) ?? (matched.campaignId ? [matched.campaignId] : [])
       );
+      // Identity (id/campaignId/campaignName/effectiveStatus) stays whatever matchMetaAd found —
+      // only the metrics prefer the testing-campaign duplicate, see pickMetricsRecord's doc
+      // comment for why these two shouldn't necessarily be the same ad object.
+      const metricsRecord = pickMetricsRecord(matched, duplicateCandidates, row.businessUnit);
 
       const video: PublishedVideo = {
         id: matched.id,
@@ -262,13 +292,13 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
         publishedDate: metaCreatedDate,
         effectiveStatus: matched.effectiveStatus,
         takenLive: true,
-        spend: matched.spend,
-        impressions: matched.impressions,
-        ctr: matched.ctr,
-        cpm: matched.cpm,
-        cpc: matched.cpc,
-        conversions: matched.conversions,
-        cpa: matched.cpa,
+        spend: metricsRecord.spend,
+        impressions: metricsRecord.impressions,
+        ctr: metricsRecord.ctr,
+        cpm: metricsRecord.cpm,
+        cpc: metricsRecord.cpc,
+        conversions: metricsRecord.conversions,
+        cpa: metricsRecord.cpa,
         durationSeconds,
         isWinning: false,
         winningSource: null,
@@ -359,8 +389,13 @@ let syncQueue: Promise<unknown> = Promise.resolve();
  * is fetched live only if isMetaSyncDue(); otherwise enrichment falls back to the backfill
  * sheet's last-known data (see backfillReader.ts) so already-live videos don't appear to revert
  * to "Not Live" just because today wasn't a Meta-fetch day.
+ *
+ * `forceMeta: true` (the fixed-time daily sync, see scheduler.ts's checkAndRunDailyMetaSync)
+ * always attempts a live fetch regardless of metaSyncMinIntervalHours — the whole point of that
+ * trigger is to guarantee one deterministic live-Meta moment per day. Meaningless combined with
+ * skipMeta; forceMeta wins if both are somehow set.
  */
-export async function runSync(options: { skipMeta?: boolean } = {}): Promise<SyncStatus> {
+export async function runSync(options: { skipMeta?: boolean; forceMeta?: boolean } = {}): Promise<SyncStatus> {
   const previous = syncQueue;
   let releaseQueue!: () => void;
   syncQueue = new Promise<void>((resolve) => {
@@ -381,13 +416,13 @@ export async function runSync(options: { skipMeta?: boolean } = {}): Promise<Syn
   }
 }
 
-async function runSyncExclusive(options: { skipMeta?: boolean }): Promise<SyncStatus> {
+async function runSyncExclusive(options: { skipMeta?: boolean; forceMeta?: boolean }): Promise<SyncStatus> {
   // Env-configured EDITOR_ROSTER + any editors added via the dashboard's "Add editor" UI —
   // fetched once per sync so a newly-added editor is recognized in both the Progress Tracker
   // sheet and the AI Creatives sheets on the very next sync.
   const roster = await editorRosterRepository.getEffective();
 
-  const fetchMetaLive = !options.skipMeta && isMetaSyncDue();
+  const fetchMetaLive = options.forceMeta || (!options.skipMeta && isMetaSyncDue());
 
   const [progressResult, metaIndexResult] = await Promise.allSettled([
     fetchProgressTracker(roster),
@@ -435,6 +470,7 @@ async function runSyncExclusive(options: { skipMeta?: boolean }): Promise<SyncSt
             byNormalizedTitle: new Map(),
             earliestCreatedByNormalizedTitle: new Map(),
             campaignIdsByNormalizedTitle: new Map(),
+            recordsByNormalizedTitle: new Map(),
             all: [],
           };
 

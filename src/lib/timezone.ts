@@ -29,6 +29,25 @@ export function getTimezoneMonthStart(timeZone: string): string {
   return `${date.slice(0, 7)}-01`;
 }
 
+/**
+ * True if today (per the given timezone's calendar) is the last day of its month — checked by
+ * whether the next calendar day rolls over into a different month, so it's correct for February
+ * in both leap and non-leap years without hardcoding day counts per month.
+ */
+export function isLastDayOfMonth(timeZone: string): boolean {
+  const { date } = getTimezoneNow(timeZone);
+  const [year, month, day] = date.split("-").map(Number);
+  const tomorrow = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, (day ?? 1) + 1));
+  return tomorrow.getUTCMonth() !== (month ?? 1) - 1;
+}
+
+/** "yyyy-MM-dd" -> "July 2026", for the monthly Slack report's header. */
+export function formatMonthLabel(isoDate: string): string {
+  const [year, month] = isoDate.split("-").map(Number);
+  const asDate = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, 1));
+  return new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(asDate);
+}
+
 function ordinal(day: number): string {
   if (day % 100 >= 11 && day % 100 <= 13) return `${day}th`;
   switch (day % 10) {

@@ -87,6 +87,16 @@ export interface MetaAdsIndex {
    * the scaling campaign" regardless of which duplicate byNormalizedTitle happened to keep.
    */
   campaignIdsByNormalizedTitle: Map<string, Set<string>>;
+  /**
+   * Every ad record sharing a normalized title (i.e. every duplicate of one concept+stage across
+   * campaigns) — not just whichever one byNormalizedTitle's last-write-wins kept. Needed because
+   * each duplicate has its OWN spend/impressions/CPI, and which one's numbers get shown matters:
+   * confirmed real case, a Lumus cut had 4 separate ad objects (2 testing, 2 scaling) with CPIs
+   * ranging 279–615 — showing whichever one byNormalizedTitle happened to keep silently picked an
+   * arbitrary one instead of the specific campaign the team actually judges CPI against (see
+   * pickMetricsRecord in syncService.ts).
+   */
+  recordsByNormalizedTitle: Map<string, MetaAdRecord[]>;
   all: MetaAdRecord[];
 }
 
@@ -244,6 +254,7 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
   const byNormalizedTitle = new Map<string, MetaAdRecord>();
   const earliestCreatedByNormalizedTitle = new Map<string, string>();
   const campaignIdsByNormalizedTitle = new Map<string, Set<string>>();
+  const recordsByNormalizedTitle = new Map<string, MetaAdRecord[]>();
   const all: MetaAdRecord[] = [];
 
   for (const { accountId, ads, insights } of perAccount) {
@@ -287,9 +298,19 @@ export async function fetchMetaAdsIndex(): Promise<MetaAdsIndex> {
         campaignIds.add(record.campaignId);
         campaignIdsByNormalizedTitle.set(key, campaignIds);
       }
+      const records = recordsByNormalizedTitle.get(key) ?? [];
+      records.push(record);
+      recordsByNormalizedTitle.set(key, records);
       all.push(record);
     }
   }
 
-  return { byAdId, byNormalizedTitle, earliestCreatedByNormalizedTitle, campaignIdsByNormalizedTitle, all };
+  return {
+    byAdId,
+    byNormalizedTitle,
+    earliestCreatedByNormalizedTitle,
+    campaignIdsByNormalizedTitle,
+    recordsByNormalizedTitle,
+    all,
+  };
 }

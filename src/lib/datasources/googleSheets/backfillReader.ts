@@ -50,6 +50,7 @@ function emptyIndex(): MetaAdsIndex {
     byNormalizedTitle: new Map(),
     earliestCreatedByNormalizedTitle: new Map(),
     campaignIdsByNormalizedTitle: new Map(),
+    recordsByNormalizedTitle: new Map(),
     all: [],
   };
 }
@@ -130,6 +131,10 @@ export async function fetchMetaIndexFromBackfillSheet(businessUnits: string[]): 
       if (rowCampaignIds.length > 0) {
         index.campaignIdsByNormalizedTitle.set(key, new Set(rowCampaignIds));
       }
+      // Only ever one record per key here — the backfill sheet stores one row per concept+stage
+      // already (whichever record pickMetricsRecord chose at the last live sync), not every
+      // duplicate ad object, so there's nothing to re-choose between on a skip-Meta day.
+      index.recordsByNormalizedTitle.set(key, [record]);
       index.all.push(record);
     }
   }

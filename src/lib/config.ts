@@ -341,6 +341,18 @@ export const config = {
     leaderboardTime: process.env.SLACK_LEADERBOARD_TIME ?? "23:45",
     leaderboardTimezone: process.env.SLACK_LEADERBOARD_TIMEZONE ?? "Asia/Kolkata",
   },
+  // A fixed daily clock time (not a rolling interval) for the live Meta sync — the 12-hourly
+  // scheduler + metaSyncMinIntervalHours combination below lands the actual live fetch at a
+  // somewhat unpredictable moment each day; this gives the team one deterministic, always-live
+  // sync time to rely on instead. See scheduler.ts's checkAndRunDailyMetaSync — calls
+  // runSync({ forceMeta: true }), which always attempts a live fetch regardless of
+  // metaSyncMinIntervalHours, and backfills the Google Sheet database as part of that same sync
+  // (already unconditional in runSyncExclusive), satisfying both "sync Meta" and "backfill the
+  // sheet" at this one time.
+  metaSyncDaily: {
+    time: process.env.META_SYNC_DAILY_TIME ?? "22:00",
+    timezone: process.env.META_SYNC_DAILY_TIMEZONE ?? "Asia/Kolkata",
+  },
   // Backfills a Google Sheet "database" (one tab per business unit) after every sync — an Apps
   // Script Web App bound to that sheet, not the Sheets API directly (no service-account/OAuth
   // setup needed; the script already runs under the sheet owner's own permissions). Disabled

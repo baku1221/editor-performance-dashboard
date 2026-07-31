@@ -25,6 +25,13 @@ interface Store {
   // file-persisted like editorRosterRepository) — worst case on a same-day redeploy is one
   // duplicate or one skipped send, low-stakes compared to editor roster data.
   slackLeaderboardLastSentDate: string | null;
+  // Same one-shot-per-day guard as slackLeaderboardLastSentDate, for the fixed-time daily Meta
+  // sync (config.metaSyncDaily) — worst case on a same-day redeploy is one skipped or duplicate
+  // forced sync, no different in risk from the leaderboard guard above.
+  metaSyncDailyLastRunDate: string | null;
+  // Last month ("yyyy-MM") the end-of-month Slack report was sent, so it fires at most once even
+  // though the scheduler checks every 5 minutes across the whole last calendar day of the month.
+  monthlyReportLastSentMonth: string | null;
   // The AI Credits tab's most recently uploaded CSV — parsed client-side, then persisted here so
   // it survives a page refresh instead of vanishing (it used to live only in React state).
   // Uploading a new CSV replaces this outright; there's no history of prior uploads.
@@ -44,6 +51,8 @@ function createEmptyStore(): Store {
       },
     },
     slackLeaderboardLastSentDate: null,
+    metaSyncDailyLastRunDate: null,
+    monthlyReportLastSentMonth: null,
     creditsData: null,
   };
 }

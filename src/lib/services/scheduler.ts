@@ -1,8 +1,8 @@
 import { config } from "../config";
 import { store } from "../cache/store";
 import { runSync } from "./syncService";
-import { sendDailyLeaderboardToSlack } from "./slackNotifier";
-import { getTimezoneNow } from "../timezone";
+import { sendDailyLeaderboardToSlack, sendMonthlyReportToSlack } from "./slackNotifier";
+import { getTimezoneNow, getTimezoneMonthStart, isLastDayOfMonth } from "../timezone";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — coarse enough to be cheap, fine enough not to drift far past the target interval
 
@@ -64,6 +64,55 @@ async function checkAndSendSlackLeaderboard(): Promise<void> {
   }
 }
 
+/**
+ * Fires at most once per IST (or configured timezone) calendar day, once the clock has crossed
+ * config.metaSyncDaily.time — a deterministic daily live-Meta moment, independent of the rolling
+ * 12h auto-sync + 24h metaSyncMinIntervalHours combination above (which lands the actual live
+ * fetch at a somewhat unpredictable moment each day). forceMeta bypasses that interval gate
+ * entirely, and the sync's own backfillDatabaseSheet call (already unconditional in
+ * runSyncExclusive) satisfies "backfill the sheet at that same time" for free.
+ */
+async function checkAndRunDailyMetaSync(): Promise<void> {
+  const { date, hhmm } = getTimezoneNow(config.metaSyncDaily.timezone);
+  if (hhmm < config.metaSyncDaily.time) return;
+  if (store.metaSyncDailyLastRunDate === date) return;
+
+  try {
+    await runSync({ forceMeta: true });
+    store.metaSyncDailyLastRunDate = date;
+    console.log(`[scheduler] Daily forced Meta sync + sheet backfill completed for ${date}`);
+  } catch (err) {
+    console.error("[scheduler] Daily forced Meta sync failed:", err);
+  }
+}
+
+/**
+ * Fires once, on the last calendar day of the month, at the same Slack leaderboard time (after
+ * that day's normal leaderboard message has already gone out) — a second, more detailed message:
+ * the month's business-unit totals plus top/bottom-5 rankings (see monthlyReportService.ts).
+ * Guarded by store.monthlyReportLastSentMonth ("yyyy-MM") so it can't double-send even though the
+ * scheduler checks every 5 minutes across the whole last day.
+ */
+async function checkAndSendMonthlyReport(): Promise<void> {
+  if (!config.slack.webhookUrl) return;
+
+  const { date, hhmm } = getTimezoneNow(config.slack.leaderboardTimezone);
+  if (hhmm < config.slack.leaderboardTime) return;
+  if (!isLastDayOfMonth(config.slack.leaderboardTimezone)) return;
+
+  const month = date.slice(0, 7);
+  if (store.monthlyReportLastSentMonth === month) return;
+
+  try {
+    const monthStart = getTimezoneMonthStart(config.slack.leaderboardTimezone);
+    await sendMonthlyReportToSlack(monthStart, date);
+    store.monthlyReportLastSentMonth = month;
+    console.log(`[scheduler] Sent monthly Slack report for ${month}`);
+  } catch (err) {
+    console.error("[scheduler] Monthly Slack report failed:", err);
+  }
+}
+
 /** Called once from instrumentation.ts when the server process boots. */
 export function startDailySyncScheduler(): void {
   if (!config.autoSync.enabled && !config.slack.webhookUrl) return;
@@ -73,9 +122,12 @@ export function startDailySyncScheduler(): void {
   if (config.autoSync.enabled) {
     console.log(`[scheduler] Auto-sync enabled — will run every ${config.autoSync.intervalHours} hours since the last sync (manual or auto).`);
   }
+  console.log(
+    `[scheduler] Daily Meta sync + sheet backfill enabled — will run once daily at ${config.metaSyncDaily.time} ${config.metaSyncDaily.timezone}.`
+  );
   if (config.slack.webhookUrl) {
     console.log(
-      `[scheduler] Slack leaderboard enabled — will send once daily at ${config.slack.leaderboardTime} ${config.slack.leaderboardTimezone}.`
+      `[scheduler] Slack leaderboard enabled — will send once daily at ${config.slack.leaderboardTime} ${config.slack.leaderboardTimezone}, plus a detailed monthly report on the last day of each month.`
     );
   }
 
@@ -83,6 +135,12 @@ export function startDailySyncScheduler(): void {
     if (config.autoSync.enabled) {
       checkAndSync().catch((err) => console.error("[scheduler] Unexpected error:", err));
     }
-    checkAndSendSlackLeaderboard().catch((err) => console.error("[scheduler] Unexpected error:", err));
+    checkAndRunDailyMetaSync().catch((err) => console.error("[scheduler] Unexpected error:", err));
+    // Sequenced, not concurrent — the monthly report is a follow-up to the daily leaderboard
+    // message ("one normal message ... then one more message"), so it must only be checked/sent
+    // after that day's leaderboard send has actually gone out (or been confirmed already sent).
+    checkAndSendSlackLeaderboard()
+      .then(() => checkAndSendMonthlyReport())
+      .catch((err) => console.error("[scheduler] Unexpected error:", err));
   }, CHECK_INTERVAL_MS);
 }
