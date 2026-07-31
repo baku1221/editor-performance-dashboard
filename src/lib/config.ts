@@ -325,9 +325,13 @@ export const config = {
   // Runs inside the app itself (see instrumentation.ts + services/scheduler.ts) — only fires
   // while a persistent server process is up, which is exactly the hosting model this app needs
   // anyway (see cache/store.ts). Fires every intervalHours since the last sync (manual click or
-  // auto), not tied to a fixed clock hour.
+  // auto), not tied to a fixed clock hour. Off by default — the fixed-time metaSyncDaily trigger
+  // below is now the sole automatic sync moment (one predictable time everything updates
+  // together), rather than this rolling interval independently refreshing sheet data (a new ad
+  // would show as "Not Live" for hours) ahead of metaSyncDaily's later Meta enrichment. Set
+  // AUTO_SYNC_ENABLED=true to bring this back as an additional safety-net sync.
   autoSync: {
-    enabled: (process.env.AUTO_SYNC_ENABLED ?? "true") !== "false",
+    enabled: (process.env.AUTO_SYNC_ENABLED ?? "false") !== "false",
     intervalHours: Number(process.env.AUTO_SYNC_INTERVAL_HOURS ?? 12),
   },
   // Daily Slack leaderboard (services/scheduler.ts + services/slackNotifier.ts) — a text-only
