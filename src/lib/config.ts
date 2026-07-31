@@ -356,7 +356,19 @@ export const config = {
   sheetBackfill: {
     webhookUrl: process.env.SHEET_BACKFILL_WEBHOOK_URL ?? "",
     secret: process.env.SHEET_BACKFILL_SECRET ?? "",
+    // The same sheet's ID, needed separately from the webhook above — the webhook can only write
+    // (Apps Script), so reading last-known enrichment back (see backfillReader.ts) goes through
+    // the ordinary zero-credential public-CSV read path, same as every other configured sheet.
+    sheetId: process.env.SHEET_BACKFILL_SHEET_ID ?? "",
   },
+  // The floor between live Meta fetches, independent of how often runSync() itself is called
+  // (manual clicks, the 12-hourly auto-sync, the daily Slack-leaderboard sync) — confirmed real
+  // case: repeated manual syncs during heavy testing tripped Meta's account-level AND
+  // application-level rate limits multiple times in one session. Enforced inside runSync itself
+  // (not the scheduler or a single route) so every trigger is covered uniformly. When skipped,
+  // enrichment falls back to the backfill sheet's last-known data (see backfillReader.ts) rather
+  // than going live — see syncService.ts's runSync.
+  metaSyncMinIntervalHours: Number(process.env.META_SYNC_MIN_INTERVAL_HOURS ?? 24),
 };
 
 export function isMetaAdsConfigured(): boolean {

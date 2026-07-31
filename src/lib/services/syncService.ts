@@ -5,6 +5,7 @@ import { fetchProgressTracker } from "../datasources/googleSheets/progressTracke
 import { fetchDriveCreativeRows, normalizeTitleForMatching, type DriveCreativeRow } from "../datasources/googleSheets/driveCreatives";
 import { fetchMetaAdsIndex, type MetaAdRecord, type MetaAdsIndex } from "../datasources/metaAds/videos";
 import { fetchVideoFilesForDriveLinks, isGoogleDriveConfigured, type DriveVideoFile } from "../datasources/googleDrive/client";
+import { fetchMetaIndexFromBackfillSheet } from "../datasources/googleSheets/backfillReader";
 import {
   parseEditorFromAdTitle,
   parseVideoKindFromAdTitle,
@@ -316,18 +317,75 @@ export async function recomputeWinningFlags(): Promise<void> {
   await publishedVideoRepository.replaceAll(flagged);
 }
 
+function hoursSince(isoDate: string | null): number {
+  if (!isoDate) return Infinity;
+  return (Date.now() - new Date(isoDate).getTime()) / (1000 * 60 * 60);
+}
+
 /**
- * Pulls fresh data from Google Sheets (progress + AI Creatives) and Meta Ads, independently — a
- * failure in one source doesn't block the others from refreshing. Lumina credits are
- * intentionally untouched here; they only update via CSV upload.
+ * True once at least config.metaSyncMinIntervalHours have passed since the last successful (or
+ * even attempted — see runSync) live Meta fetch. Reused by both the auto-scheduler and every
+ * manual sync path so Meta genuinely can't be hit more than once per interval regardless of how
+ * many things ask for a sync in between.
  */
-export async function runSync(): Promise<SyncStatus> {
+function isMetaSyncDue(): boolean {
+  return hoursSince(store.syncStatus.sources.metaAds.fetchedAt) >= config.metaSyncMinIntervalHours;
+}
+
+// Serializes every runSync call (manual Sheets, manual Meta, the 12-hourly auto-sync, the daily
+// Slack-time sync) so two never run concurrently — confirmed real case: an auto-sync tick fired
+// while a manual sync was already in flight, and both independently hammered the same Drive/
+// Sheets APIs at once, turning a normally-fast sync into a 9+ minute one (each contending for the
+// same rate-limited calls the other was also making). A queued call still runs with its OWN
+// options once its turn comes — this only prevents overlap, never silently skips or merges work.
+let syncQueue: Promise<unknown> = Promise.resolve();
+
+/**
+ * Pulls fresh data from Google Sheets (progress + AI Creatives) and, subject to the once-per-
+ * config.metaSyncMinIntervalHours floor, Meta Ads — independently, a failure in one source
+ * doesn't block the others from refreshing. Lumina credits are intentionally untouched here;
+ * they only update via CSV upload.
+ *
+ * `skipMeta: true` (the "Sync Sheets" button/route) unconditionally never touches Meta this
+ * call, regardless of whether the interval has elapsed — for a fast, guaranteed-rate-limit-safe
+ * refresh of just the sheets. Without it (the "Sync Meta" button/route, and the scheduler), Meta
+ * is fetched live only if isMetaSyncDue(); otherwise enrichment falls back to the backfill
+ * sheet's last-known data (see backfillReader.ts) so already-live videos don't appear to revert
+ * to "Not Live" just because today wasn't a Meta-fetch day.
+ */
+export async function runSync(options: { skipMeta?: boolean } = {}): Promise<SyncStatus> {
+  const previous = syncQueue;
+  let releaseQueue!: () => void;
+  syncQueue = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+  await previous.catch(() => {}); // a prior sync's own failure shouldn't block this one from taking its turn
+
+  try {
+    await runSyncExclusive(options);
+    // A snapshot, not the live store.syncStatus reference — confirmed real bug otherwise: a
+    // queued call (e.g. the scheduler's own tick) that starts the instant this one releases the
+    // queue can mutate store.syncStatus before this response finishes serializing, making this
+    // call's result silently reflect the OTHER call's fields (e.g. metaAds.fetchedAt looking
+    // "live" on a skipMeta:true call that never touched Meta itself).
+    return JSON.parse(JSON.stringify(store.syncStatus)) as SyncStatus;
+  } finally {
+    releaseQueue();
+  }
+}
+
+async function runSyncExclusive(options: { skipMeta?: boolean }): Promise<SyncStatus> {
   // Env-configured EDITOR_ROSTER + any editors added via the dashboard's "Add editor" UI —
   // fetched once per sync so a newly-added editor is recognized in both the Progress Tracker
   // sheet and the AI Creatives sheets on the very next sync.
   const roster = await editorRosterRepository.getEffective();
 
-  const [progressResult, metaIndexResult] = await Promise.allSettled([fetchProgressTracker(roster), fetchMetaAdsIndex()]);
+  const fetchMetaLive = !options.skipMeta && isMetaSyncDue();
+
+  const [progressResult, metaIndexResult] = await Promise.allSettled([
+    fetchProgressTracker(roster),
+    fetchMetaLive ? fetchMetaAdsIndex() : Promise.resolve(null),
+  ]);
 
   const fetchedAt = new Date().toISOString();
 
@@ -342,16 +400,31 @@ export async function runSync(): Promise<SyncStatus> {
     };
   }
 
-  // Meta is an enrichment source now — if it fails, videos still get built from the sheets alone
-  // (just all not-live), rather than losing the whole sync.
-  const metaIndex: MetaAdsIndex =
-    metaIndexResult.status === "fulfilled"
-      ? metaIndexResult.value
-      : { byAdId: new Map(), byNormalizedTitle: new Map(), earliestCreatedByNormalizedTitle: new Map(), all: [] };
+  let metaIndex: MetaAdsIndex;
 
-  try {
-    const videos = await buildVideosFromSheets(metaIndex, roster);
-    await publishedVideoRepository.replaceAll(videos);
+  if (!fetchMetaLive) {
+    // Either explicitly skipped (Sync Sheets) or not due yet — reconstruct enrichment from the
+    // backfill sheet's last-known data rather than going live, so already-live videos don't
+    // silently revert to "Not Live". The status message reflects WHY it was skipped, but keeps
+    // the real last-fetch timestamp (not "now") since nothing was actually re-fetched.
+    const businessUnits = Array.from(new Set(config.driveCreativeSheets.map((s) => s.businessUnit)));
+    metaIndex = await fetchMetaIndexFromBackfillSheet(businessUnits);
+    const reason = options.skipMeta
+      ? "Skipped (Sync Sheets) — using backfill sheet for enrichment."
+      : `Skipped — synced within the last ${config.metaSyncMinIntervalHours}h. Using backfill sheet for enrichment.`;
+    store.syncStatus.sources.metaAds = {
+      ok: store.syncStatus.sources.metaAds.ok,
+      fetchedAt: store.syncStatus.sources.metaAds.fetchedAt,
+      message: reason,
+    };
+  } else {
+    // Meta is an enrichment source now — if it fails, videos still get built from the sheets
+    // alone (just all not-live), rather than losing the whole sync.
+    metaIndex =
+      metaIndexResult.status === "fulfilled" && metaIndexResult.value
+        ? metaIndexResult.value
+        : { byAdId: new Map(), byNormalizedTitle: new Map(), earliestCreatedByNormalizedTitle: new Map(), all: [] };
+
     store.syncStatus.sources.metaAds =
       metaIndexResult.status === "fulfilled"
         ? { ok: true, fetchedAt }
@@ -361,12 +434,17 @@ export async function runSync(): Promise<SyncStatus> {
             message:
               metaIndexResult.reason instanceof Error ? metaIndexResult.reason.message : String(metaIndexResult.reason),
           };
+  }
+
+  try {
+    const videos = await buildVideosFromSheets(metaIndex, roster);
+    await publishedVideoRepository.replaceAll(videos);
   } catch (err) {
     // The sheets themselves are the primary source — a failure here means no video data at all
     // to build from, so leave whatever was already stored untouched rather than wiping it.
     store.syncStatus.sources.metaAds = {
+      ...store.syncStatus.sources.metaAds,
       ok: false,
-      fetchedAt: store.syncStatus.sources.metaAds.fetchedAt,
       message: err instanceof Error ? err.message : String(err),
     };
   }

@@ -13,17 +13,18 @@ const SOURCE_LABELS: Record<keyof SyncStatus["sources"], string> = {
 
 export function SyncButton({ onSynced }: { onSynced: () => void }) {
   const { data, mutate } = useSWR<SyncStatus>("/api/sync", jsonFetcher);
-  const [isSyncing, setIsSyncing] = useState(false);
+  // Tracked per endpoint so clicking one doesn't show the other as "Syncing…" too.
+  const [syncing, setSyncing] = useState<"sheets" | "meta" | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  async function handleSync() {
-    setIsSyncing(true);
+  async function handleSync(endpoint: string, which: "sheets" | "meta") {
+    setSyncing(which);
     setSyncError(null);
     try {
-      const res = await fetch("/api/sync", { method: "POST" });
+      const res = await fetch(endpoint, { method: "POST" });
       const body = await res.json();
       if (!res.ok) {
-        // Non-admin (see /api/sync's POST handler) — the button stays visible to everyone, same
+        // Non-admin (see the route's POST handler) — the buttons stay visible to everyone, same
         // pattern as "+ Add editor", but the action itself is server-rejected with a clear reason.
         setSyncError(body.error ?? "Sync failed.");
         return;
@@ -36,7 +37,7 @@ export function SyncButton({ onSynced }: { onSynced: () => void }) {
       // tooltip instead of letting the fetch rejection bubble up and crash the whole page.
       setSyncError("Couldn't reach the server. Try again in a moment.");
     } finally {
-      setIsSyncing(false);
+      setSyncing(null);
     }
   }
 
@@ -45,14 +46,24 @@ export function SyncButton({ onSynced }: { onSynced: () => void }) {
   return (
     <div className="flex items-center gap-3">
       <button
-        onClick={handleSync}
-        disabled={isSyncing}
+        onClick={() => handleSync("/api/sync/sheets", "sheets")}
+        disabled={syncing !== null}
         className={clsx(
-          "rounded-lg px-3 py-1.5 text-sm font-medium text-white transition",
-          isSyncing ? "bg-app-border" : "bg-purple-600 hover:bg-purple-500"
+          "rounded-lg px-3 py-1.5 text-sm font-medium transition",
+          syncing === "sheets" ? "bg-app-border text-app-muted" : "border border-app-border text-app-text hover:bg-app-border"
         )}
       >
-        {isSyncing ? "Syncing…" : "Sync now"}
+        {syncing === "sheets" ? "Syncing…" : "Sync Sheets"}
+      </button>
+      <button
+        onClick={() => handleSync("/api/sync", "meta")}
+        disabled={syncing !== null}
+        className={clsx(
+          "rounded-lg px-3 py-1.5 text-sm font-medium text-white transition",
+          syncing === "meta" ? "bg-app-border" : "bg-purple-600 hover:bg-purple-500"
+        )}
+      >
+        {syncing === "meta" ? "Syncing…" : "Sync Meta"}
       </button>
       <div className="group relative">
         <span
@@ -61,7 +72,7 @@ export function SyncButton({ onSynced }: { onSynced: () => void }) {
             hasFailure ? "bg-red-500" : data?.lastSyncedAt ? "bg-green-500" : "bg-gray-300"
           )}
         />
-        <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-64 -translate-x-1/2 rounded-lg bg-gray-900 p-3 text-xs text-white opacity-0 shadow-lg transition group-hover:opacity-100">
+        <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 w-72 -translate-x-1/2 rounded-lg bg-gray-900 p-3 text-xs text-white opacity-0 shadow-lg transition group-hover:opacity-100">
           <div className="mb-1 font-medium">
             {data?.lastSyncedAt ? `Last synced ${new Date(data.lastSyncedAt).toLocaleString()}` : "Not synced yet"}
           </div>

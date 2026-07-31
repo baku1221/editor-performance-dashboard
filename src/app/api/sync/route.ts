@@ -8,6 +8,11 @@ export async function GET() {
 }
 
 /**
+ * "Sync Meta" — attempts a live Meta fetch (subject to the once-per-config.metaSyncMinIntervalHours
+ * floor enforced inside runSync itself; skipped attempts still refresh sheets/drive and fall back
+ * to the backfill sheet for Meta enrichment). See also POST /api/sync/sheets for the
+ * Meta-never-touched variant.
+ *
  * Manual sync is restricted beyond just "signed in" — a sync hits Meta/Google Drive hard enough
  * to trip their rate limits (confirmed real case this session), so only one person triggering it
  * on demand keeps that risk contained. The 12-hourly auto-sync (scheduler.ts) is unaffected —

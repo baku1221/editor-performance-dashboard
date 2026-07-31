@@ -70,11 +70,16 @@ export async function backfillDatabaseSheet(videos: PublishedVideo[]): Promise<v
     byBusinessUnit.set(video.businessUnit, list);
   }
 
-  for (const [businessUnit, unitVideos] of byBusinessUnit) {
-    try {
-      await backfillBusinessUnitRows(businessUnit, HEADERS, unitVideos.map(toRow));
-    } catch (err) {
-      console.error(`[sheetBackfill] Failed to backfill "${businessUnit}":`, err);
-    }
-  }
+  // In parallel, not sequential — confirmed real case: 7 business units awaited one at a time
+  // (each its own Apps Script round trip, doing a bulk read+merge+write of a 1000+ row tab) added
+  // up to minutes of pure serial wait, when every unit's write is fully independent of the others.
+  await Promise.all(
+    Array.from(byBusinessUnit.entries()).map(async ([businessUnit, unitVideos]) => {
+      try {
+        await backfillBusinessUnitRows(businessUnit, HEADERS, unitVideos.map(toRow));
+      } catch (err) {
+        console.error(`[sheetBackfill] Failed to backfill "${businessUnit}":`, err);
+      }
+    })
+  );
 }
