@@ -152,6 +152,13 @@ export interface EditorDetail {
   videos: PublishedVideo[];
 }
 
+// Every Main-kind (no Cuts) ad for one business unit across all editors — the "Total Unique Ads
+// (Main)" summary card's drill-down, not scoped to a single editor like EditorDetail is.
+export interface MainAdsDetail {
+  businessUnit: string;
+  videos: PublishedVideo[];
+}
+
 export interface SyncStatus {
   lastSyncedAt: string | null;
   sources: Record<

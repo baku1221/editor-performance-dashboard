@@ -2,6 +2,7 @@ import type {
   DashboardFilters,
   EditorDetail,
   EditorPerformanceRow,
+  MainAdsDetail,
   PerformanceData,
   PerformanceSummary,
   PublishedVideo,
@@ -20,7 +21,7 @@ function round1(n: number): number {
 
 /** The ad's concept (before the first "|") plus its editor — same grouping key a Main and every
  * one of its Cuts share, since they're re-edits of the same underlying video. */
-function conceptKey(video: PublishedVideo): string {
+export function conceptKey(video: PublishedVideo): string {
   const concept = video.adName.split("|")[0]?.trim() ?? video.adName;
   const normalized = concept.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
   return `${video.editorName ?? ""}::${normalized}`;
@@ -178,4 +179,40 @@ export async function getEditorDetail(
     editorName,
     videos: editorVideos.sort((a, b) => b.createdDate.localeCompare(a.createdDate)),
   };
+}
+
+/** Every Main-kind ad for one business unit across all editors — the "Total Unique Ads (Main)"
+ * summary card's drill-down (see MainAdsDetail's doc comment in types.ts). */
+export async function getMainAdsDetail(businessUnit: string, filters: DashboardFilters): Promise<MainAdsDetail> {
+  const allVideos = await publishedVideoRepository.getAll();
+  const filtered = filterVideos(allVideos, filters);
+
+  const videos = filtered.filter((v) => v.businessUnit === businessUnit && v.videoKind === "Main");
+
+  return {
+    businessUnit,
+    videos: videos.sort((a, b) => b.createdDate.localeCompare(a.createdDate)),
+  };
+}
+
+/** Every version (Main + every Cut) of the same underlying video as the given ad id — the Main
+ * Ads drill-down's own drill-down, since a Main's CPI is one number but a scaling-campaign
+ * promotion can land on any individual Cut (see winningRule.ts). Main sorts first, then Cuts in
+ * whatever order they were created. */
+export async function getAdVersions(businessUnit: string, adId: string, filters: DashboardFilters): Promise<PublishedVideo[]> {
+  const allVideos = await publishedVideoRepository.getAll();
+  const filtered = filterVideos(allVideos, filters);
+
+  const target = filtered.find((v) => v.businessUnit === businessUnit && v.id === adId);
+  if (!target) return [];
+
+  const targetKey = conceptKey(target);
+  return filtered
+    .filter((v) => v.businessUnit === businessUnit && conceptKey(v) === targetKey)
+    .sort((a, b) => {
+      if (a.videoKind === b.videoKind) return a.createdDate.localeCompare(b.createdDate);
+      if (a.videoKind === "Main") return -1;
+      if (b.videoKind === "Main") return 1;
+      return 0;
+    });
 }

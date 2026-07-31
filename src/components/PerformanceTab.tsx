@@ -9,8 +9,14 @@ import type { EditorPerformanceRow, PerformanceData, PerformanceSummary } from "
 import { computeMveScores } from "@/lib/services/mveScoreService";
 import { SummaryCard } from "./SummaryCard";
 import { EditorDetailPanel } from "./EditorDetailPanel";
+import { MainAdsDetailPanel } from "./MainAdsDetailPanel";
 
 const ALL_UNIT = "All";
+
+// Business units where "Total Unique Ads (Main)" opens the Main Ads drill-down — these are the
+// two units whose winning rule is scaling-campaign membership (see winningCampaignIdOverrides in
+// config.ts), where seeing every Main ad's CPI/scaled status side by side is most useful.
+const MAIN_ADS_DRILLDOWN_UNITS = new Set(["Astrotalk", "Lumus"]);
 
 // Display-only relabeling — the internal businessUnit string ("Astrotalk") stays exactly the
 // same everywhere else (config keys, the backfill sheet's tab name, API payloads); only what's
@@ -192,6 +198,7 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
   const query = buildQueryString(filters);
   const { data, isLoading } = useSWR<PerformanceData>(`/api/performance?${query}`, jsonFetcher);
   const [selectedEditor, setSelectedEditor] = useState<string | null>(null);
+  const [showMainAdsDetail, setShowMainAdsDetail] = useState(false);
   const [businessUnit, setBusinessUnit] = useState<string>(ALL_UNIT);
   const [editorFilter, setEditorFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey | null>("mveScore");
@@ -279,7 +286,11 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           <SummaryCard label="Total Ads (with Cuts)" value={summary.totalVideosSubmitted} />
-          <SummaryCard label="Total Unique Ads (Main)" value={summary.totalMainAds} />
+          <SummaryCard
+            label="Total Unique Ads (Main)"
+            value={summary.totalMainAds}
+            onClick={MAIN_ADS_DRILLDOWN_UNITS.has(activeUnit) ? () => setShowMainAdsDetail(true) : undefined}
+          />
           <SummaryCard label="Winning Creatives" value={summary.winningCreatives} />
           <SummaryCard label="Winning %" value={`${summary.winningPercent}%`} />
           <SummaryCard label="Total Editors" value={summary.totalEditors} />
@@ -391,6 +402,10 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
           businessUnit={activeUnit === ALL_UNIT ? undefined : activeUnit}
           onClose={() => setSelectedEditor(null)}
         />
+      )}
+
+      {showMainAdsDetail && MAIN_ADS_DRILLDOWN_UNITS.has(activeUnit) && (
+        <MainAdsDetailPanel businessUnit={activeUnit} filters={filters} onClose={() => setShowMainAdsDetail(false)} />
       )}
     </div>
   );
