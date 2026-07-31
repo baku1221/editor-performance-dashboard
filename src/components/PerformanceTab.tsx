@@ -12,6 +12,17 @@ import { EditorDetailPanel } from "./EditorDetailPanel";
 
 const ALL_UNIT = "All";
 
+// Display-only relabeling — the internal businessUnit string ("Astrotalk") stays exactly the
+// same everywhere else (config keys, the backfill sheet's tab name, API payloads); only what's
+// shown in the UI changes, since "Astrotalk" alone reads as ambiguous with Astrotalk Store/India.
+const BUSINESS_UNIT_DISPLAY_LABEL: Record<string, string> = {
+  Astrotalk: "Astrotalk Foreign",
+};
+
+function displayLabelFor(unit: string): string {
+  return BUSINESS_UNIT_DISPLAY_LABEL[unit] ?? unit;
+}
+
 // Preferred display order for the known business units; anything else falls back to alphabetical.
 const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media", "Pandit Ji"];
 
@@ -146,7 +157,7 @@ function deriveSummaryFromRows(rows: EditorPerformanceRow[], dateRange: Performa
     totalVideosSubmitted,
     totalMainAds,
     winningCreatives,
-    winningPercent: totalVideosSubmitted > 0 ? Math.round((winningCreatives / totalVideosSubmitted) * 1000) / 10 : 0,
+    winningPercent: totalMainAds > 0 ? Math.round((winningCreatives / totalMainAds) * 1000) / 10 : 0,
     totalEditors: rows.filter((r) => r.editorName !== "Unmapped").length,
     dateRange,
   };
@@ -172,7 +183,7 @@ function combineRowsByEditor(rows: EditorPerformanceRow[]): EditorPerformanceRow
   return Array.from(byEditor.values())
     .map((row) => ({
       ...row,
-      winningPercent: row.videosSubmitted > 0 ? Math.round((row.winningCreatives / row.videosSubmitted) * 1000) / 10 : 0,
+      winningPercent: row.mainAdsCount > 0 ? Math.round((row.winningCreatives / row.mainAdsCount) * 1000) / 10 : 0,
     }))
     .sort((a, b) => a.editorName.localeCompare(b.editorName));
 }
@@ -236,7 +247,7 @@ export function PerformanceTab({ filters }: { filters: UiFilters }) {
                   unit === activeUnit ? theme.tab : "text-app-muted hover:bg-white/5 hover:text-app-text"
                 )}
               >
-                {unit}
+                {displayLabelFor(unit)}
               </button>
             ))}
           </div>

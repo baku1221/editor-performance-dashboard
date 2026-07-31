@@ -108,7 +108,7 @@ export interface EditorPerformanceRow {
   editorName: string;
   businessUnit: string;
   videosSubmitted: number; // all ads: Main + Cut + unclassified
-  mainAdsCount: number; // ads whose title's stage segment says "Main" — the unique/primary edits, cuts excluded
+  mainAdsCount: number; // ads whose title's stage segment says "Main" — the unique/primary edits, cuts excluded; also winningPercent's denominator (see performanceService.ts)
   winningCreatives: number;
   winningPercent: number;
   activeCreatives: number;

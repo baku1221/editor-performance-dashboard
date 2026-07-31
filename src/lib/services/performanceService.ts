@@ -73,7 +73,12 @@ function buildRow(editorName: string, businessUnit: string, videos: PublishedVid
     videosSubmitted: videos.length,
     mainAdsCount,
     winningCreatives,
-    winningPercent: videos.length > 0 ? round1((winningCreatives / videos.length) * 100) : 0,
+    // Main Ads, not raw videosSubmitted (Main+Cut) — a Cut is a re-edit of the same underlying
+    // video, not separate work, so it shouldn't dilute the denominator any more than it inflates
+    // the numerator (winningCreatives is already deduped to "per concept" for business units
+    // that need it — see countWinningCreatives). Universal across every business unit, not just
+    // the deduped ones, so the ratio always reads the same way: winners per unique video made.
+    winningPercent: mainAdsCount > 0 ? round1((winningCreatives / mainAdsCount) * 100) : 0,
     activeCreatives,
     totalDurationSeconds,
   };
@@ -99,7 +104,7 @@ function buildSummary(videos: PublishedVideo[], rows: EditorPerformanceRow[], bu
     totalVideosSubmitted: videos.length,
     totalMainAds,
     winningCreatives,
-    winningPercent: videos.length > 0 ? round1((winningCreatives / videos.length) * 100) : 0,
+    winningPercent: totalMainAds > 0 ? round1((winningCreatives / totalMainAds) * 100) : 0,
     totalEditors: rows.filter((r) => r.editorName !== UNMAPPED_LABEL).length,
     dateRange: getAnalysisWindow(),
   };

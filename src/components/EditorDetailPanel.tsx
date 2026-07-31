@@ -39,6 +39,16 @@ const UNIT_TAB_ACTIVE: Record<string, string> = {
 
 const ALL_DETAIL_UNIT = "All";
 
+// Same display-only relabeling as PerformanceTab.tsx — the internal businessUnit string stays
+// "Astrotalk" everywhere else; only what's shown here changes.
+const BUSINESS_UNIT_DISPLAY_LABEL: Record<string, string> = {
+  Astrotalk: "Astrotalk Foreign",
+};
+
+function displayLabelFor(unit: string): string {
+  return BUSINESS_UNIT_DISPLAY_LABEL[unit] ?? unit;
+}
+
 // Same preferred display order as PerformanceTab's business-unit tabs, kept local since it's a
 // small, presentation-only constant.
 const BUSINESS_UNIT_ORDER = ["Lumus", "Astrotalk", "Astrotalk India", "Astrotalk Store", "Social Media", "Pandit Ji"];
@@ -118,7 +128,7 @@ export function EditorDetailPanel({
         <div className={clsx("flex items-center justify-between border-b px-6 py-4", accentClass)}>
           <div>
             <h2 className="text-lg font-semibold text-app-text">{editorName}</h2>
-            {businessUnit && <span className="text-xs text-app-muted">{businessUnit}</span>}
+            {businessUnit && <span className="text-xs text-app-muted">{displayLabelFor(businessUnit)}</span>}
           </div>
           <button
             onClick={onClose}
@@ -161,7 +171,7 @@ export function EditorDetailPanel({
                           : "text-app-muted hover:bg-white/5 hover:text-app-text"
                       )}
                     >
-                      {unit}
+                      {displayLabelFor(unit)}
                     </button>
                   ))}
                 </div>
@@ -233,7 +243,7 @@ export function EditorDetailPanel({
                               UNIT_BADGE[video.businessUnit] ?? "bg-app-border text-app-muted"
                             )}
                           >
-                            {video.businessUnit}
+                            {displayLabelFor(video.businessUnit)}
                           </span>
                         </td>
                         <td className="px-3 py-2.5 text-app-muted">{video.campaignName || "—"}</td>

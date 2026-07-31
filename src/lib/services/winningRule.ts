@@ -43,11 +43,13 @@ function compare(value: number, operator: WinningRuleConfig["operator"], thresho
  * for a business unit like Pandit Ji, "Winning" isn't a metric threshold at all, it's an ad-name
  * naming convention (see WinningNamePatternRule's doc comment in types.ts).
  *
- * `campaignIdOverridesByBusinessUnit` is a second, independent signal ORed on top of whichever
- * rule above applies — an ad simply being present in one of the listed campaign IDs is itself
- * enough to be "Winning", regardless of ad name or metric. Used for Lumus/Astrotalk's "graduated
- * from testing to scaling" signal: once an ad gets promoted into a scaling campaign, that
- * promotion IS the winning signal, on top of (not instead of) the ✅ ad-name marker.
+ * `campaignIdOverridesByBusinessUnit` is a THIRD, independent signal — an ad simply being present
+ * in one of the listed campaign IDs is itself enough to be "Winning". For a business unit that
+ * ALSO has a namePattern rule (none currently do), it's ORed on top of that rule; for a business
+ * unit with no namePattern (Lumus/Astrotalk), it's the SOLE determinant — no fallback to the
+ * metric-based rule below, since "present in the scaling campaign" is a complete, deliberate
+ * yes/no signal on its own (the team's workflow is to move/copy a winning ad into the scaling
+ * campaign once proven, so campaign membership already IS the ground truth).
  */
 export function applyWinningRule(
   videos: PublishedVideo[],
@@ -63,6 +65,7 @@ export function applyWinningRule(
     }
 
     const scalingCampaignIds = campaignIdOverridesByBusinessUnit[video.businessUnit];
+    const hasCampaignOnlyRule = scalingCampaignIds !== undefined;
     const isInScalingCampaign = Boolean(video.campaignId && scalingCampaignIds?.includes(video.campaignId));
 
     const namePattern = namePatternOverridesByBusinessUnit[video.businessUnit];
@@ -76,8 +79,8 @@ export function applyWinningRule(
       return { ...video, isWinning, winningSource: isWinning ? "rule" : null };
     }
 
-    if (isInScalingCampaign) {
-      return { ...video, isWinning: true, winningSource: "rule" };
+    if (hasCampaignOnlyRule) {
+      return { ...video, isWinning: isInScalingCampaign, winningSource: isInScalingCampaign ? "rule" : null };
     }
 
     const effectiveRule = ruleOverridesByBusinessUnit[video.businessUnit] ?? rule;

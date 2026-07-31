@@ -289,23 +289,15 @@ export const config = {
   // prefixed "L1C1 "/"l1C1 " (the sheet's own row lacks this prefix; it's added only once an ad is
   // duplicated into the testing campaign — the same title-matching logic that already handles
   // Meta's "– Copy" suffix duplicates picks these up too, since it's a pure word addition).
-  // Lumus and Astrotalk (Foreign) instead mark a winning ad with a "✅" prefix on the ad name
-  // itself, confined to their one already-configured "Install" campaign (both accounts' single
-  // configured campaign — "USA_Lumus_Android_Install_testing-PPP" and "FOREIGN | PPP | Testing -
-  // Install_native_USA_android" — already has "Install" in its name, so no new campaign IDs were
-  // needed, unlike Pandit Ji's separate testing campaign). Confirmed via a real ad in that
-  // Astrotalk campaign: "✅Temptation island | V1 - cut2 | ..." — note the marker was on a CUT,
-  // not that concept's Main, which is exactly the "any version can carry the marker" case
-  // performanceService.ts's per-concept dedup (see DEDUPE_WINNING_BY_CONCEPT_BUSINESS_UNITS) and
-  // progressService.ts's matchVideo (pre-existing "ANY version — Main or Cut — is winning" join)
-  // are both built to handle.
+  // Lumus/Astrotalk (Foreign) do NOT use a name-pattern rule — their winning ads are identified
+  // purely by scaling-campaign membership instead (see winningCampaignIdOverrides below); the
+  // team's own workflow is to move/copy a winning ad into the scaling campaign once it's proven,
+  // so campaign membership already IS the ground truth, no separate ad-name marker needed.
   winningNamePatternOverrides:
     Object.keys(parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)).length > 0
       ? parseWinningNamePatternOverrides(process.env.WINNING_NAME_PATTERN_OVERRIDES)
       : {
           "Pandit Ji": { adNameIncludes: "l1c1", campaignNameIncludes: "testing" },
-          Lumus: { adNameStartsWith: "✅", campaignNameIncludes: "install" },
-          Astrotalk: { adNameStartsWith: "✅", campaignNameIncludes: "install" },
         },
   // Business units where multiple Cuts of the SAME underlying video shouldn't each count as a
   // separate "winning creative" — the ✅ marker above is applied per-ad-object, and a Cut is just
