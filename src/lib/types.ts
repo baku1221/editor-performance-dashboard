@@ -152,11 +152,19 @@ export interface EditorDetail {
   videos: PublishedVideo[];
 }
 
+// A Main ad plus its script writer, joined at query time against the Progress Tracker sheet
+// (by editor + concept-title — same match progressService.ts's matchVideo does in the opposite
+// direction) — script writer isn't an intrinsic PublishedVideo field since it comes from a
+// wholly separate sheet/pipeline.
+export interface MainAdRow extends PublishedVideo {
+  scriptWriter: string | null;
+}
+
 // Every Main-kind (no Cuts) ad for one business unit across all editors — the "Total Unique Ads
 // (Main)" summary card's drill-down, not scoped to a single editor like EditorDetail is.
 export interface MainAdsDetail {
   businessUnit: string;
-  videos: PublishedVideo[];
+  videos: MainAdRow[];
 }
 
 export interface SyncStatus {

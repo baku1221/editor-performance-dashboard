@@ -7,13 +7,13 @@ import { editorMatchesFilter } from "../filters";
 // The Progress Tracker sheet's tab names ("Astrotalk Foreign"/"Lumus" cohorts) don't line up 1:1
 // with Meta's business-unit labels ("Astrotalk"/"Lumus") — same underlying business, different
 // name picked when each sheet/tab was set up. Needed to scope the match to the right account.
-const COHORT_TO_BUSINESS_UNIT: Record<string, string> = {
+export const COHORT_TO_BUSINESS_UNIT: Record<string, string> = {
   "Astrotalk Foreign": "Astrotalk",
   Lumus: "Lumus",
   India: "Astrotalk India",
 };
 
-function firstSegment(adName: string): string {
+export function firstSegment(adName: string): string {
   return adName.split("|")[0] ?? adName;
 }
 

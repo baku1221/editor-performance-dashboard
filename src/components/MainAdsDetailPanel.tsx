@@ -71,6 +71,7 @@ export function MainAdsDetailPanel({
                   <thead>
                     <tr className="border-b border-app-border bg-app-bg text-app-muted">
                       <th className="px-3 py-2.5 font-medium">Ad Title</th>
+                      <th className="px-3 py-2.5 font-medium">Script Writer</th>
                       <th className="px-3 py-2.5 font-medium">Editor</th>
                       <th className="px-3 py-2.5 font-medium">Date Made</th>
                       <th className="px-3 py-2.5 font-medium">Date Taken Live</th>
@@ -88,6 +89,7 @@ export function MainAdsDetailPanel({
                         )}
                       >
                         <td className="px-3 py-2.5 text-app-text">{video.adName}</td>
+                        <td className="px-3 py-2.5 text-app-muted">{video.scriptWriter ?? "—"}</td>
                         <td className="px-3 py-2.5 text-app-muted">{video.editorName ?? "Unmapped"}</td>
                         <td className="px-3 py-2.5 text-app-muted">{video.sheetCreatedDate || "—"}</td>
                         <td className="px-3 py-2.5 text-app-muted">{video.publishedDate || "—"}</td>

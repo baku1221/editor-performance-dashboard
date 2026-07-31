@@ -2,14 +2,19 @@ import type {
   DashboardFilters,
   EditorDetail,
   EditorPerformanceRow,
+  MainAdRow,
   MainAdsDetail,
   PerformanceData,
   PerformanceSummary,
+  ProgressItem,
   PublishedVideo,
 } from "../types";
 import { config } from "../config";
 import { publishedVideoRepository } from "../repositories/publishedVideoRepository";
+import { progressRepository } from "../repositories/progressRepository";
 import { dateWithinFilters, editorMatchesFilter } from "../filters";
+import { normalizeTitleForMatching } from "../datasources/googleSheets/driveCreatives";
+import { COHORT_TO_BUSINESS_UNIT, firstSegment } from "./progressService";
 
 const UNMAPPED_LABEL = "Unmapped";
 const ACTIVE_STATUSES = new Set(["ACTIVE"]);
@@ -181,13 +186,29 @@ export async function getEditorDetail(
   };
 }
 
+/** The Progress Tracker item this video's script came from — same editor + concept-title match
+ * progressService.ts's matchVideo does in the opposite direction (sheet row -> Meta video),
+ * reversed here (Meta video -> sheet row) since MainAdRow needs the script writer's name. */
+function findScriptWriter(video: PublishedVideo, progressItems: ProgressItem[]): string | null {
+  const targetConcept = normalizeTitleForMatching(firstSegment(video.adName));
+  const match = progressItems.find(
+    (item) =>
+      COHORT_TO_BUSINESS_UNIT[item.cohort] === video.businessUnit &&
+      item.editorName === video.editorName &&
+      normalizeTitleForMatching(firstSegment(item.videoName)) === targetConcept
+  );
+  return match?.scriptWriter ?? null;
+}
+
 /** Every Main-kind ad for one business unit across all editors — the "Total Unique Ads (Main)"
  * summary card's drill-down (see MainAdsDetail's doc comment in types.ts). */
 export async function getMainAdsDetail(businessUnit: string, filters: DashboardFilters): Promise<MainAdsDetail> {
-  const allVideos = await publishedVideoRepository.getAll();
+  const [allVideos, progressItems] = await Promise.all([publishedVideoRepository.getAll(), progressRepository.getAll()]);
   const filtered = filterVideos(allVideos, filters);
 
-  const videos = filtered.filter((v) => v.businessUnit === businessUnit && v.videoKind === "Main");
+  const videos: MainAdRow[] = filtered
+    .filter((v) => v.businessUnit === businessUnit && v.videoKind === "Main")
+    .map((v) => ({ ...v, scriptWriter: findScriptWriter(v, progressItems) }));
 
   return {
     businessUnit,
