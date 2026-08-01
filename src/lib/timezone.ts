@@ -29,6 +29,15 @@ export function getTimezoneMonthStart(timeZone: string): string {
   return `${date.slice(0, 7)}-01`;
 }
 
+/** True if today (per the given timezone's calendar) falls on a Saturday or Sunday — the team
+ * doesn't work weekends, so the daily editor-videos Slack message shouldn't fire on those days. */
+export function isWeekend(timeZone: string): boolean {
+  const { date } = getTimezoneNow(timeZone);
+  const [year, month, day] = date.split("-").map(Number);
+  const dayOfWeek = new Date(Date.UTC(year ?? 0, (month ?? 1) - 1, day ?? 1)).getUTCDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+}
+
 /**
  * True if today (per the given timezone's calendar) is the last day of its month — checked by
  * whether the next calendar day rolls over into a different month, so it's correct for February

@@ -2,7 +2,7 @@ import { config } from "../config";
 import { store } from "../cache/store";
 import { runSync } from "./syncService";
 import { sendDailyLeaderboardToSlack, sendMonthlyReportToSlack } from "./slackNotifier";
-import { getTimezoneNow, getTimezoneMonthStart, isLastDayOfMonth } from "../timezone";
+import { getTimezoneNow, getTimezoneMonthStart, isLastDayOfMonth, isWeekend } from "../timezone";
 
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — coarse enough to be cheap, fine enough not to drift far past the target interval
 
@@ -40,7 +40,8 @@ async function checkAndSync(): Promise<void> {
  * Fires at most once per IST (or configured timezone) calendar day, once the clock has crossed
  * config.slack.leaderboardTime — checked on the same 5-minute tick as checkAndSync, so it can be
  * up to 5 minutes late but never fires twice for the same day (guarded by
- * store.slackLeaderboardLastSentDate, not a precise one-shot timer).
+ * store.slackLeaderboardLastSentDate, not a precise one-shot timer). Skipped entirely on
+ * Saturday/Sunday — the team is off those days, so there's no "editor videos today" to report.
  *
  * Runs its own sync immediately before sending — the periodic 12-hour auto-sync could have last
  * run many hours before the leaderboard time, so relying on it alone risks posting a stale
@@ -53,6 +54,7 @@ async function checkAndSendSlackLeaderboard(): Promise<void> {
   const { date, hhmm } = getTimezoneNow(config.slack.leaderboardTimezone);
   if (hhmm < config.slack.leaderboardTime) return;
   if (store.slackLeaderboardLastSentDate === date) return;
+  if (isWeekend(config.slack.leaderboardTimezone)) return;
 
   try {
     await runSync();
