@@ -37,12 +37,13 @@ interface StoredCreditsData {
 // This tab has its own CSV, own filters, own state — independent of the rest of the dashboard's
 // Google Sheets / Meta Ads data and shared filter bar (date range, editor filter). It does,
 // though, cross-reference Performance data for the Credits/Main Ad and Credits/Duration columns
-// below — fetched here directly, all-time and unfiltered, rather than wired to the shared
-// FiltersBar, since a credits upload isn't scoped to whatever date range that bar happens to have.
+// below — fetched here directly rather than wired to the shared FiltersBar, since a credits
+// upload isn't scoped to whatever date range that bar happens to have. Scoped to this tab's own
+// Date filter when one is set (so "credits per Main Ad" compares like periods instead of a
+// filtered credit total against an unfiltered, all-time Main Ads count); all-time when "All
+// Dates" is selected, since there's no single day to scope to.
 export function CreditsTab() {
   const { data: stored, mutate: mutateStored } = useSWR<StoredCreditsData | null>("/api/credits", jsonFetcher);
-  const { data: performanceData } = useSWR<PerformanceData>("/api/performance", jsonFetcher);
-
   const [allRows, setAllRows] = useState<CreditRow[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
@@ -62,6 +63,12 @@ export function CreditsTab() {
   const [operatorFilter, setOperatorFilter] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("totalCredits");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  // Scoped to this tab's own Date filter (single day, "yyyy-MM-dd" — same format the Performance
+  // API's from/to expect) when one is set; all-time (no query params) when "All Dates" is
+  // selected, since there's no single day to scope to.
+  const performanceQuery = dateFilter ? `?from=${dateFilter}&to=${dateFilter}` : "";
+  const { data: performanceData } = useSWR<PerformanceData>(`/api/performance${performanceQuery}`, jsonFetcher);
 
   function handleFile(file: File) {
     const reader = new FileReader();
