@@ -33,7 +33,9 @@ export interface MonthlyReport {
   topByWinningPercent: MonthlyReportEntry[];
   topByMainAds: MonthlyReportEntry[];
   topByDuration: MonthlyReportEntry[];
-  bottomByMve: MonthlyReportEntry[];
+  // Lowest Main Ads count, not MVE score — "needs a push" should mean "made the fewest ads", a
+  // plainer and less ambiguous signal than a composite score dipping low for other reasons.
+  bottomByMainAds: MonthlyReportEntry[];
 }
 
 const ALL_UNIT = "All";
@@ -113,6 +115,6 @@ export async function getMonthlyReport(monthStart: string, monthEnd: string, top
     topByWinningPercent,
     topByMainAds: topN(scored, topCount, (r) => r.mainAdsCount),
     topByDuration: topN(scored, topCount, (r) => r.totalDurationSeconds),
-    bottomByMve: bottomN(scored, topCount, (r) => r.mveScore),
+    bottomByMainAds: bottomN(scored, topCount, (r) => r.mainAdsCount),
   };
 }

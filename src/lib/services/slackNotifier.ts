@@ -89,8 +89,9 @@ function formatDuration(seconds: number): string {
  * still sends as normal on this same day) — a separate, more detailed message: the month's total
  * output per business unit (Main Ads specifically for Astrotalk Foreign/Lumus, not Main+Cut — see
  * monthlyReportService.ts's MAIN_ADS_ONLY_UNITS), then four top-5 rankings (MVE Score, Winning %,
- * Main Ads, Duration), then the bottom 5 by MVE Score with an encouraging nudge rather than just a
- * bare list. Abhi (a static-image designer, not a video editor) is excluded from every ranking.
+ * Main Ads, Duration), then the bottom 5 by LOWEST Main Ads count with an encouraging nudge rather
+ * than just a bare list. Abhi (a static-image designer) and Abhay (single-video sample) are
+ * excluded from every ranking.
  */
 export async function sendMonthlyReportToSlack(monthStart: string, monthEnd: string): Promise<void> {
   if (!config.slack.webhookUrl) {
@@ -120,7 +121,7 @@ export async function sendMonthlyReportToSlack(monthStart: string, monthEnd: str
           type: "section",
           text: {
             type: "mrkdwn",
-            text: `*Needs a push*\n${formatRanked(report.bottomByMve, (v) => `${v}`)}\n\n_Buckle up — see you in the top 5 next month!_ 💪`,
+            text: `*Needs a push*\n${formatRanked(report.bottomByMainAds, (v) => `${v} ads`)}\n\n_Buckle up — see you in the top 5 next month!_ 💪`,
           },
         },
       ],
