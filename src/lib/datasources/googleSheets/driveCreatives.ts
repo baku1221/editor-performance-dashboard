@@ -1,6 +1,7 @@
 import { config } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { fetchSheetTable } from "./client";
+import { formatMonthLabel, getTimezoneMonthStart } from "../../timezone";
 
 export interface DriveCreativeRow {
   metaAdId: string;
@@ -34,6 +35,24 @@ function parseTabMonth(tabName: string): string {
   const [, monthName, year] = match;
   const monthNumber = monthName ? MONTH_NUMBERS[monthName] : undefined;
   return monthNumber ? `${year}-${monthNumber}` : "";
+}
+
+/**
+ * Ensures the CURRENT calendar month's tab (e.g. "August 2026") is always included alongside
+ * whatever historical tabs are configured (DRIVE_CREATIVE_SHEET_TABS* in .env.local) — confirmed
+ * real gap: those env vars only listed past months, so as soon as a new month started, that
+ * month's real, populated tab (created by the team following their own naming convention) was
+ * silently never read until someone manually added it. Computed fresh on every call (not baked
+ * into the static config object), since a long-lived server process can now run for weeks without
+ * restarting — see config.metaSyncDaily — and a value computed once at process boot would go
+ * stale the moment the month rolled over. Only applied to sheets that already use this naming
+ * convention (at least one existing tab parses as a month) — a sheet like Astrotalk Store's second
+ * one, whose tabs are "india"/"native", isn't month-based at all and is left untouched.
+ */
+function withCurrentMonthTab(tabs: string[]): string[] {
+  if (!tabs.some((t) => parseTabMonth(t) !== "")) return tabs;
+  const current = formatMonthLabel(getTimezoneMonthStart("Asia/Kolkata"));
+  return tabs.includes(current) ? tabs : [current, ...tabs];
 }
 
 const HEADER_ALIASES = {
@@ -210,7 +229,7 @@ export async function fetchDriveCreativeRows(): Promise<DriveCreativeRow[]> {
   const rows: DriveCreativeRow[] = [];
 
   for (const sheet of config.driveCreativeSheets) {
-    for (const tab of sheet.tabs) {
+    for (const tab of withCurrentMonthTab(sheet.tabs)) {
       try {
         const { headers, rows: dataRows } = await fetchSheetTable(sheet.sheetId, tab);
         const locator = buildColumnLocator(headers);
