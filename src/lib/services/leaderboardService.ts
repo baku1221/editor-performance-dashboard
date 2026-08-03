@@ -1,6 +1,6 @@
 import { publishedVideoRepository } from "../repositories/publishedVideoRepository";
 import { config } from "../config";
-import { getTimezoneNow, getTimezoneMonthStart } from "../timezone";
+import { getTimezoneNow } from "../timezone";
 
 export interface LeaderboardEntry {
   editorName: string;
@@ -62,13 +62,20 @@ export interface DailyLeaderboards {
   businessUnitTotals: Record<string, number>; // total videos (Main + Cut) made today, per business unit
 }
 
-/** Both leaderboards the Slack message needs, computed once per send to stay consistent. */
-export async function getDailyLeaderboards(monthTopN = 5): Promise<DailyLeaderboards> {
-  const { date } = getTimezoneNow(config.slack.leaderboardTimezone);
-  const monthStart = getTimezoneMonthStart(config.slack.leaderboardTimezone);
+/**
+ * Both leaderboards the Slack message needs, computed once per send to stay consistent.
+ * `overrideDate` ("yyyy-MM-dd") lets a manual resend target a specific past day (e.g. re-sending
+ * a corrected report for a day whose data was fixed after the fact) instead of always today — the
+ * automatic scheduler trigger never passes this, so its behavior is unchanged.
+ */
+export async function getDailyLeaderboards(monthTopN = 5, overrideDate?: string): Promise<DailyLeaderboards> {
+  const date = overrideDate ?? getTimezoneNow(config.slack.leaderboardTimezone).date;
+  // Derived from `date` itself, not always "today's" month — correct even if overrideDate ever
+  // targets a day in a different month than today.
+  const monthStart = `${date.slice(0, 7)}-01`;
 
   const [today, month, businessUnitTotals] = await Promise.all([
-    getTopEditorsByMainAds(date, date), // full list — everyone who made something today
+    getTopEditorsByMainAds(date, date), // full list — everyone who made something that day
     getTopEditorsByMainAds(monthStart, date, monthTopN),
     getBusinessUnitVideoTotals(date, date),
   ]);

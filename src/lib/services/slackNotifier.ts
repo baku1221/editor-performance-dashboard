@@ -27,13 +27,18 @@ function formatBusinessUnitTotals(totals: Record<string, number>): string {
  * lists every editor who made a Main ad today (not a top-N cutoff — a full daily roll call),
  * followed by each business unit's total video count (Main + Cut) for the day, and "This Month"
  * stays a top-5 ranking.
+ *
+ * `overrideDate` lets a manual resend re-post a corrected snapshot for a specific past day
+ * (e.g. a day whose underlying sheet-read data was fixed after that day's automatic send already
+ * went out) — the automatic scheduler trigger never passes this, so its normal "today" behavior
+ * is unchanged.
  */
-export async function sendDailyLeaderboardToSlack(): Promise<void> {
+export async function sendDailyLeaderboardToSlack(overrideDate?: string): Promise<void> {
   if (!config.slack.webhookUrl) {
     throw new Error("SLACK_WEBHOOK_URL is not set — nothing to send to.");
   }
 
-  const { date, today, month, businessUnitTotals } = await getDailyLeaderboards(5);
+  const { date, today, month, businessUnitTotals } = await getDailyLeaderboards(5, overrideDate);
   const friendlyDate = formatFriendlyDate(date);
 
   const res = await fetch(config.slack.webhookUrl, {
