@@ -50,11 +50,21 @@ export async function getScriptWriterData(filters: DashboardFilters, group: Scri
   return Array.from(byWriter.entries())
     .map(([scriptWriter, writerItems]) => {
       const winningCreatives = writerItems.filter((i) => i.matchedIsWinning).length;
+      // winningPercent's own denominator is narrower than scriptsGiven: a script that's Not
+      // Started/Working/Review/Delayed, or one that's Completed but never matched to a live Meta
+      // ad (see progressService.ts's matchVideo — matchedIsWinning stays null until matched),
+      // structurally can't be "winning" either way, so it shouldn't dilute the rate. Confirmed
+      // real gap otherwise: a writer with 62 scripts but only 17 actually matched to a live ad
+      // showed 6.5% (4/62) here vs the Performance tab's comparable ~25% (which only ever counts
+      // ads that made it live) — same writer, same 4 wins, just a much noisier denominator.
+      // scriptsGiven itself stays the full count — it's a legitimate "how much did they write"
+      // metric on its own, shown as its own summary card.
+      const eligible = writerItems.filter((i) => i.matchedIsWinning !== null).length;
       return {
         scriptWriter,
         scriptsGiven: writerItems.length,
         winningCreatives,
-        winningPercent: writerItems.length > 0 ? round1((winningCreatives / writerItems.length) * 100) : 0,
+        winningPercent: eligible > 0 ? round1((winningCreatives / eligible) * 100) : 0,
       };
     })
     .sort((a, b) => b.scriptsGiven - a.scriptsGiven);
