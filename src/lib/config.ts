@@ -299,17 +299,6 @@ export const config = {
       : {
           "Pandit Ji": { adNameIncludes: "l1c1", campaignNameIncludes: "testing" },
         },
-  // Business units where multiple Cuts of the SAME underlying video shouldn't each count as a
-  // separate "winning creative" — the ✅ marker above is applied per-ad-object, and a Cut is just
-  // a re-edit of the same concept (sometimes the marker lands on a Cut, not its Main, per the
-  // real example above), so counting every marked cut individually would overcount how many
-  // distinct concepts actually won. See performanceService.ts's countWinningCreatives. Scoped to
-  // just Lumus/Astrotalk (not Pandit Ji, Astrotalk Store, etc.) since this is specifically about
-  // the ✅ marker's per-ad-object semantics, not a general policy for every business unit.
-  winningDedupeByConceptBusinessUnits:
-    csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS).length > 0
-      ? csv(process.env.WINNING_DEDUPE_BY_CONCEPT_BUSINESS_UNITS)
-      : ["Lumus", "Astrotalk"],
   // See parseWinningCampaignIdOverrides. Lumus's two scaling campaigns ("USA_lumus_android_
   // Scaling PPP CBO_Start_Journey" and "USA_Lumus_APP_iOS_PPP_StartJourney") + Astrotalk's one
   // ("Native_Foreign | PPP | Purchase - Android CBO (Just for testing) – Start Journey_native_
