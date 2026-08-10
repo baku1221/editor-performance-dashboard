@@ -28,8 +28,9 @@ const MONTH_NUMBERS: Record<string, string> = {
   december: "12",
 };
 
-/** Parses a tab name like "July 2026" into "2026-07" — empty string if it doesn't match that shape. */
-function parseTabMonth(tabName: string): string {
+/** Parses a tab name like "July 2026" into "2026-07" — empty string if it doesn't match that shape.
+ * Exported for reuse by inHouseAds.ts, which follows the same monthly-tab convention. */
+export function parseTabMonth(tabName: string): string {
   const match = tabName.trim().toLowerCase().match(/^([a-z]+)\s+(\d{4})$/);
   if (!match) return "";
   const [, monthName, year] = match;
@@ -49,7 +50,7 @@ function parseTabMonth(tabName: string): string {
  * convention (at least one existing tab parses as a month) — a sheet like Astrotalk Store's second
  * one, whose tabs are "india"/"native", isn't month-based at all and is left untouched.
  */
-function withCurrentMonthTab(tabs: string[]): string[] {
+export function withCurrentMonthTab(tabs: string[]): string[] {
   if (!tabs.some((t) => parseTabMonth(t) !== "")) return tabs;
   const current = formatMonthLabel(getTimezoneMonthStart("Asia/Kolkata"));
   return tabs.includes(current) ? tabs : [current, ...tabs];

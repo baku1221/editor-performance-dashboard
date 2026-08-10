@@ -250,6 +250,25 @@ export const config = {
       businessUnit: "Pandit Ji",
     },
   ].filter((s) => s.sheetId),
+  // "In House Ads" copywriter source for the Copy Writer tab only — two separate creative-log
+  // sheets (same Region/Name/Editor/Caption/... shape as driveCreativeSheets above, same monthly-
+  // tab convention), NOT wired into the Performance tab or PublishedVideo/Meta sync at all: there's
+  // no CPI/spend data in either sheet, and their Meta ad account isn't onboarded, so there's no way
+  // to determine "winning" for this cohort yet (see scriptWriterService.ts — winningPercent stays
+  // 0 here on purpose, not a bug). Unlike the Ad Tracker sheets' own "Script By" column, these
+  // sheets have no dedicated copywriter field at all — the name is embedded in the free-text Name
+  // column instead (see parseCopywriterFromName in inHouseAds.ts).
+  inHouseAdsSheets: [
+    {
+      sheetId: process.env.IN_HOUSE_ADS_SHEET_ID ?? "",
+      tabs: csv(process.env.IN_HOUSE_ADS_SHEET_TABS).length > 0 ? csv(process.env.IN_HOUSE_ADS_SHEET_TABS) : ["August 2026", "July 2026"],
+    },
+    {
+      sheetId: process.env.IN_HOUSE_ADS_SHEET_ID_2 ?? "",
+      tabs:
+        csv(process.env.IN_HOUSE_ADS_SHEET_TABS_2).length > 0 ? csv(process.env.IN_HOUSE_ADS_SHEET_TABS_2) : ["August 2026", "July 2026"],
+    },
+  ].filter((s) => s.sheetId),
   // Business units in this list still get their own selectable Performance-tab, but are left out
   // of the "All" combined view/summary and the Slack leaderboard's cross-unit ranking — see
   // PerformanceTab.tsx's combineRowsByEditor and leaderboardService.ts's getTopEditorsByMainAds.

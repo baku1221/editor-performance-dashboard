@@ -3,6 +3,7 @@ import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
 import { fetchSheetTable } from "./client";
+import { fetchInHouseAdsProgress } from "./inHouseAds";
 
 // Real tabs don't share one fixed column layout (extra/renamed columns), so
 // fields are located by normalized header name rather than fixed position.
@@ -67,7 +68,14 @@ function cellAt(row: string[], index: number | undefined): string {
 }
 
 /**
- * Fetches + merges the configured progress-tracker tabs (see config.googleSheets.progressTracker.tabs).
+ * Fetches + merges the configured progress-tracker tabs (see config.googleSheets.progressTracker.tabs),
+ * plus the separate "In House Ads" copywriter sheets (see config.inHouseAdsSheets and
+ * inHouseAds.ts) appended on at the end — a different shape of sheet entirely (no Script
+ * By/Status columns), but same ProgressItem shape once parsed, so it can feed the Copy Writer
+ * tab's own group selector without a separate fetch/repository. fetchInHouseAdsProgress isolates
+ * its own failures internally (per sheet+tab), so a problem there can't fail this whole function
+ * and wipe out the Ad Tracker sheet's own successful fetch.
+ *
  * `roster` defaults to the env-configured EDITOR_ROSTER but callers pass the merged roster
  * (env + editors added via the dashboard's "Add editor" UI) so newly-added editors are
  * recognized here too, not just in Meta-video attribution.
@@ -114,6 +122,8 @@ export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.
         });
       });
   }
+
+  items.push(...(await fetchInHouseAdsProgress(roster)));
 
   return items;
 }

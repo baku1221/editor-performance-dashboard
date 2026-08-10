@@ -3,16 +3,29 @@ import { config } from "../config";
 import { getProgressData } from "./progressService";
 import { dateWithinFilters } from "../filters";
 
-export type ScriptWriterGroup = "Foreign" | "India";
+export type ScriptWriterGroup = "Foreign" | "India" | "In House Ads";
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
 }
 
+/** Shared by both scriptwriters API routes so a new group only needs to be recognized here once.
+ * Defaults to "Foreign" for anything else, same as before this had more than two groups. */
+export function parseScriptWriterGroup(raw: string | null): ScriptWriterGroup {
+  if (raw === "India") return "India";
+  if (raw === "In House Ads") return "In House Ads";
+  return "Foreign";
+}
+
 // "Foreign" = the original Lumus + Astrotalk Foreign cohorts combined (the Copy Writer tab's
-// only group before India was added); "India" = just the Ad Tracker-India cohort.
+// only group before India was added); "India" = just the Ad Tracker-India cohort; "In House Ads"
+// = the separate copywriter sheets in config.inHouseAdsSheets (see inHouseAds.ts). Foreign is
+// still "everything else" rather than an explicit allowlist, same as before India was split out —
+// but now has to exclude In House Ads by name too, or it would silently absorb that cohort as well.
 function matchesGroup(cohort: string, group: ScriptWriterGroup): boolean {
-  return group === "India" ? cohort === "India" : cohort !== "India";
+  if (group === "India") return cohort === "India";
+  if (group === "In House Ads") return cohort === "In House Ads";
+  return cohort !== "India" && cohort !== "In House Ads";
 }
 
 // Only these writers show up in the Copy Writer tab — the sheet's "Script By" column also has

@@ -15,12 +15,12 @@ export function ScriptWriterDetailPanel({
 }: {
   scriptWriter: string;
   filters: UiFilters;
-  group: "Foreign" | "India";
+  group: "Foreign" | "India" | "In House Ads";
   onClose: () => void;
 }) {
   const query = buildQueryString(filters);
   const { data, isLoading } = useSWR<ScriptWriterDetail>(
-    `/api/scriptwriters/${encodeURIComponent(scriptWriter)}?${query}&group=${group}`,
+    `/api/scriptwriters/${encodeURIComponent(scriptWriter)}?${query}&group=${encodeURIComponent(group)}`,
     jsonFetcher
   );
 

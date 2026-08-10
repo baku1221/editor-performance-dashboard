@@ -9,14 +9,23 @@ import type { ScriptWriterRow } from "@/lib/types";
 import { SummaryCard } from "./SummaryCard";
 import { ScriptWriterDetailPanel } from "./ScriptWriterDetailPanel";
 
-type ScriptWriterGroup = "Foreign" | "India";
+type ScriptWriterGroup = "Foreign" | "India" | "In House Ads";
 type SortKey = "scriptsGiven" | "winningCreatives" | "winningPercent";
 type SortDir = "asc" | "desc";
 
 const GROUPS: Array<{ key: ScriptWriterGroup; label: string }> = [
   { key: "Foreign", label: "Foreign" },
   { key: "India", label: "India" },
+  { key: "In House Ads", label: "In House Ads" },
 ];
+
+// In House Ads has no live Meta data behind it yet (see config.ts's inHouseAdsSheets doc
+// comment) — winningCreatives/winningPercent are always 0 for this group, which would read as
+// "nobody's work is winning" rather than "not tracked yet". Shown as "—" instead so it's clearly
+// a different kind of blank, not a real zero.
+function tracksWinning(group: ScriptWriterGroup): boolean {
+  return group !== "In House Ads";
+}
 
 function sortRows(rows: ScriptWriterRow[], sortKey: SortKey, sortDir: SortDir): ScriptWriterRow[] {
   const sorted = [...rows].sort((a, b) => a[sortKey] - b[sortKey]);
@@ -47,7 +56,7 @@ function SortableHeader({
 export function ScriptWriterTab({ filters }: { filters: UiFilters }) {
   const [group, setGroup] = useState<ScriptWriterGroup>("Foreign");
   const query = buildQueryString(filters);
-  const { data, isLoading } = useSWR<ScriptWriterRow[]>(`/api/scriptwriters?${query}&group=${group}`, jsonFetcher);
+  const { data, isLoading } = useSWR<ScriptWriterRow[]>(`/api/scriptwriters?${query}&group=${encodeURIComponent(group)}`, jsonFetcher);
   const [selectedWriter, setSelectedWriter] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("scriptsGiven");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -89,7 +98,7 @@ export function ScriptWriterTab({ filters }: { filters: UiFilters }) {
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
         <SummaryCard label="Total Scripts Given" value={totalScripts} />
-        <SummaryCard label="Total Winning" value={totalWinning} />
+        <SummaryCard label="Total Winning" value={tracksWinning(group) ? totalWinning : "—"} />
         <SummaryCard label="Script Writers" value={rows.length} />
       </div>
 
@@ -132,8 +141,8 @@ export function ScriptWriterTab({ filters }: { filters: UiFilters }) {
               >
                 <td className="px-4 py-3 font-medium text-app-text">{row.scriptWriter}</td>
                 <td className="px-4 py-3 text-app-muted">{row.scriptsGiven}</td>
-                <td className="px-4 py-3 text-app-muted">{row.winningCreatives}</td>
-                <td className="px-4 py-3 text-app-muted">{row.winningPercent}%</td>
+                <td className="px-4 py-3 text-app-muted">{tracksWinning(group) ? row.winningCreatives : "—"}</td>
+                <td className="px-4 py-3 text-app-muted">{tracksWinning(group) ? `${row.winningPercent}%` : "—"}</td>
               </tr>
             ))}
           </tbody>
