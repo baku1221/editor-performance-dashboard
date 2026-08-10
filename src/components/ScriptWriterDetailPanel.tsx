@@ -15,7 +15,7 @@ export function ScriptWriterDetailPanel({
 }: {
   scriptWriter: string;
   filters: UiFilters;
-  group: "Foreign" | "India" | "In House Ads";
+  group: "Foreign" | "India" | "In House Ads Astrotalk" | "In House Ads Lumus";
   onClose: () => void;
 }) {
   const query = buildQueryString(filters);

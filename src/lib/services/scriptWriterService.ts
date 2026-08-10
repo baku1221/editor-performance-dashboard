@@ -2,8 +2,9 @@ import type { DashboardFilters, ScriptWriterDetail, ScriptWriterRow } from "../t
 import { config } from "../config";
 import { getProgressData } from "./progressService";
 import { dateWithinFilters } from "../filters";
+import { IN_HOUSE_ADS_COHORT_PREFIX } from "../datasources/googleSheets/inHouseAds";
 
-export type ScriptWriterGroup = "Foreign" | "India" | "In House Ads";
+export type ScriptWriterGroup = "Foreign" | "India" | "In House Ads Lumus" | "In House Ads Astrotalk";
 
 function round1(n: number): number {
   return Math.round(n * 10) / 10;
@@ -13,19 +14,22 @@ function round1(n: number): number {
  * Defaults to "Foreign" for anything else, same as before this had more than two groups. */
 export function parseScriptWriterGroup(raw: string | null): ScriptWriterGroup {
   if (raw === "India") return "India";
-  if (raw === "In House Ads") return "In House Ads";
+  if (raw === "In House Ads Lumus") return "In House Ads Lumus";
+  if (raw === "In House Ads Astrotalk") return "In House Ads Astrotalk";
   return "Foreign";
 }
 
 // "Foreign" = the original Lumus + Astrotalk Foreign cohorts combined (the Copy Writer tab's
-// only group before India was added); "India" = just the Ad Tracker-India cohort; "In House Ads"
-// = the separate copywriter sheets in config.inHouseAdsSheets (see inHouseAds.ts). Foreign is
-// still "everything else" rather than an explicit allowlist, same as before India was split out —
-// but now has to exclude In House Ads by name too, or it would silently absorb that cohort as well.
+// only group before India was added); "India" = just the Ad Tracker-India cohort; the two "In
+// House Ads *" groups = config.inHouseAdsSheets rows split by their own Region cell (see
+// cohortForRegion in inHouseAds.ts). Foreign is still "everything else" rather than an explicit
+// allowlist, same as before India was split out — the prefix check (rather than naming both In
+// House Ads cohorts individually) means a future third region added there is automatically
+// excluded from Foreign too, without needing an update here.
 function matchesGroup(cohort: string, group: ScriptWriterGroup): boolean {
   if (group === "India") return cohort === "India";
-  if (group === "In House Ads") return cohort === "In House Ads";
-  return cohort !== "India" && cohort !== "In House Ads";
+  if (group.startsWith(IN_HOUSE_ADS_COHORT_PREFIX)) return cohort === group;
+  return cohort !== "India" && !cohort.startsWith(IN_HOUSE_ADS_COHORT_PREFIX);
 }
 
 // Only these writers show up in the Copy Writer tab — the sheet's "Script By" column also has

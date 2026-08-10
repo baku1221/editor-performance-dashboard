@@ -5,14 +5,35 @@ import { normalizeEditorName } from "../../services/editorTitleParser";
 import { fetchSheetTable } from "./client";
 import { parseTabMonth, withCurrentMonthTab } from "./driveCreatives";
 
-// The cohort label used throughout the app (ProgressItem.cohort, the Copy Writer tab's group
-// selector) for rows sourced from config.inHouseAdsSheets.
-export const IN_HOUSE_ADS_COHORT = "In House Ads";
+// The cohort prefix used throughout the app (ProgressItem.cohort, the Copy Writer tab's group
+// selector, the Daily Progress exclusion filter) for every row sourced from config.inHouseAdsSheets
+// — see cohortForRegion below for how a row's own Region cell picks the specific "In House Ads
+// <Label>" cohort.
+export const IN_HOUSE_ADS_COHORT_PREFIX = "In House Ads";
+
+// Each sheet's own Region column is one clean value across every row (confirmed real data: sheet
+// 1 is 100% "Lumus", sheet 2 is 100% "Angrez") — "Angrez" (Hindi/Urdu for "English"/foreign) is
+// this team's own name for what's labeled "Astrotalk" everywhere else in this app (same "Astrotalk
+// Foreign" business unit the Performance tab tracks). Read from the row's own Region cell rather
+// than assumed per-sheet, so this still resolves correctly if a sheet ever mixes regions.
+const REGION_TO_LABEL: Record<string, string> = {
+  lumus: "Lumus",
+  angrez: "Astrotalk",
+};
+
+function cohortForRegion(region: string): string {
+  const label = REGION_TO_LABEL[region.trim().toLowerCase()];
+  // Falls back to the bare prefix (not one of the two known sub-cohorts) for any future/unmapped
+  // region value — still excluded from Daily Progress and from Foreign/India (see matchesGroup's
+  // prefix check), just won't show up under either Astrotalk/Lumus sub-tab until mapped here.
+  return label ? `${IN_HOUSE_ADS_COHORT_PREFIX} ${label}` : IN_HOUSE_ADS_COHORT_PREFIX;
+}
 
 const HEADER_ALIASES = {
   name: ["name"],
   editorName: ["editor"],
   uploadDates: ["uploaddates"],
+  region: ["region"],
 } as const;
 
 type Field = keyof typeof HEADER_ALIASES;
@@ -93,17 +114,19 @@ function normalizeUploadDate(raw: string, sourceMonth: string): string {
 
 /**
  * Reads config.inHouseAdsSheets (see its doc comment) into ProgressItem-shaped rows for the Copy
- * Writer tab's "In House Ads" group. Every logged row already has a finished caption/heading, so
- * (unlike the Ad Tracker sheets, which track a script through Not Started -> ... -> Completed)
- * there's no meaningful in-progress state here — every row is treated as Completed. Static rows
- * count same as Video ones (deliberately NOT filtered like driveCreatives.ts does) — writing the
- * copy for a static ad is still copywriting work, even though this app doesn't track static
- * editors' video performance.
+ * Writer tab's "In House Ads" sub-tabs — split into "In House Ads Lumus"/"In House Ads Astrotalk"
+ * by each row's own Region cell (see cohortForRegion), not by which of the two sheets it came
+ * from, so this still resolves correctly if a sheet ever mixes regions. Every logged row already
+ * has a finished caption/heading, so (unlike the Ad Tracker sheets, which track a script through
+ * Not Started -> ... -> Completed) there's no meaningful in-progress state here — every row is
+ * treated as Completed. Static rows count same as Video ones (deliberately NOT filtered like
+ * driveCreatives.ts does) — writing the copy for a static ad is still copywriting work, even
+ * though this app doesn't track static editors' video performance.
  *
  * matchedIsWinning/matchedDurationSeconds/matchedTakenLive stay null forever for this cohort —
- * there's no COHORT_TO_BUSINESS_UNIT entry for "In House Ads" (see progressService.ts), so
- * getProgressData's matching never has a business unit to match against. That's intentional, not
- * a bug: neither sheet has CPI/spend data, and their Meta ad account isn't onboarded into the
+ * there's no COHORT_TO_BUSINESS_UNIT entry for either In House Ads cohort (see progressService.ts),
+ * so getProgressData's matching never has a business unit to match against. That's intentional,
+ * not a bug: neither sheet has CPI/spend data, and their Meta ad account isn't onboarded into the
  * sync, so there's no live data to determine "winning" from yet.
  *
  * Each sheet+tab is isolated in its own try/catch, same resilience principle as
@@ -139,7 +162,7 @@ export async function fetchInHouseAdsProgress(roster: EditorRosterEntry[] = conf
               status: "Completed",
               startedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
               completedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
-              cohort: IN_HOUSE_ADS_COHORT,
+              cohort: cohortForRegion(cellAt(row, locator.region)),
               matchedIsWinning: null,
               matchedDurationSeconds: null,
               matchedTakenLive: null,
