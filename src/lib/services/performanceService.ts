@@ -223,11 +223,23 @@ function findScriptWriter(video: PublishedVideo, progressItems: ProgressItem[]):
  * summary card's drill-down (see MainAdsDetail's doc comment in types.ts). */
 export async function getMainAdsDetail(businessUnit: string, filters: DashboardFilters): Promise<MainAdsDetail> {
   const [allVideos, progressItems] = await Promise.all([publishedVideoRepository.getAll(), progressRepository.getAll()]);
-  const filtered = filterVideos(allVideos, filters);
+  const unitVideos = filterVideos(allVideos, filters).filter((v) => v.businessUnit === businessUnit);
 
-  const videos: MainAdRow[] = filtered
-    .filter((v) => v.businessUnit === businessUnit && v.videoKind === "Main")
-    .map((v) => ({ ...v, scriptWriter: findScriptWriter(v, progressItems) }));
+  // A concept is "Scaled" if ANY of its versions is — the Main shown in this row, or one of its
+  // own Cuts — same "any version wins for the whole concept" rule countWinningCreatives already
+  // applies to the aggregate winningPercent above. Without this, a Main whose own ad object never
+  // got duplicated into the scaling campaign showed "No" here even though one of its Cuts had
+  // been — confirmed real case: the Main sat in the testing campaign while its Cut sat in the
+  // scaling campaign, same underlying creative, just the Main's own raw isWinning was shown.
+  const winningConceptKeys = new Set(unitVideos.filter((v) => v.isWinning).map(conceptKey));
+
+  const videos: MainAdRow[] = unitVideos
+    .filter((v) => v.videoKind === "Main")
+    .map((v) => ({
+      ...v,
+      isWinning: winningConceptKeys.has(conceptKey(v)),
+      scriptWriter: findScriptWriter(v, progressItems),
+    }));
 
   return {
     businessUnit,
