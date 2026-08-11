@@ -211,7 +211,20 @@ export function normalizeTitleForMatching(title: string): string {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-  return collapsed.replace(/\s+copy(\s+\d+)?$/, "").trim();
+
+  // Looped, not a single strip — confirmed real case: a scaling campaign's own ad is sometimes a
+  // duplicate of a duplicate ("... – Copy 2 – Copy"), stacking more than one Meta-appended "Copy"
+  // suffix on the same underlying title. A single-pass strip left one layer behind ("... copy 2"),
+  // which never normalized down to the same base title as its testing-campaign original (zero
+  // suffixes) or a single-"Copy" duplicate elsewhere — silently breaking every duplicate-title
+  // lookup this function backs (campaignIdsByNormalizedTitle, byNormalizedTitle, etc.) for any ad
+  // that had been copied more than once.
+  let result = collapsed;
+  while (true) {
+    const stripped = result.replace(/\s+copy(\s+\d+)?$/, "").trim();
+    if (stripped === result) return result;
+    result = stripped;
+  }
 }
 
 /**

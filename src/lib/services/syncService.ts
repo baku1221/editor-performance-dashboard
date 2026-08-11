@@ -4,6 +4,7 @@ import { config, type EditorRosterEntry } from "../config";
 import { fetchProgressTracker } from "../datasources/googleSheets/progressTracker";
 import { fetchDriveCreativeRows, normalizeTitleForMatching, type DriveCreativeRow } from "../datasources/googleSheets/driveCreatives";
 import { fetchMetaAdsIndex, type MetaAdRecord, type MetaAdsIndex } from "../datasources/metaAds/videos";
+import { fetchInHouseAdsWinningIndex } from "../datasources/metaAds/inHouseAdsWinning";
 import { fetchVideoFilesForDriveLinks, isGoogleDriveConfigured, type DriveVideoFile } from "../datasources/googleDrive/client";
 import { fetchMetaIndexFromBackfillSheet } from "../datasources/googleSheets/backfillReader";
 import {
@@ -438,8 +439,22 @@ async function runSyncExclusive(options: { skipMeta?: boolean; forceMeta?: boole
 
   const fetchMetaLive = options.forceMeta || (!options.skipMeta && isMetaSyncDue());
 
+  // The In House Ads Copy Writer group's own winning check (separate accounts, never touches the
+  // main Meta index/Performance tab) — only re-fetched when Meta is being fetched live this cycle
+  // anyway; otherwise store.inHouseAdsWinning keeps whatever it already had, same "don't revert to
+  // unknown on a sheets-only sync" principle as the main backfill fallback below. Awaited before
+  // fetchProgressTracker (not run in parallel with it) since that call needs the resolved result
+  // to compute matchedIsWinning for In House Ads rows.
+  if (fetchMetaLive) {
+    try {
+      store.inHouseAdsWinning = await fetchInHouseAdsWinningIndex();
+    } catch (err) {
+      console.error("[sync] In House Ads winning-check fetch failed — keeping last-known data:", err);
+    }
+  }
+
   const [progressResult, metaIndexResult] = await Promise.allSettled([
-    fetchProgressTracker(roster),
+    fetchProgressTracker(roster, store.inHouseAdsWinning),
     fetchMetaLive ? fetchMetaAdsIndex() : Promise.resolve(null),
   ]);
 

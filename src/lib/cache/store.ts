@@ -1,5 +1,6 @@
 import type { ProgressItem, PublishedVideo, SyncStatus } from "../types";
 import type { CreditRow } from "../creditsDashboard";
+import type { InHouseAdsWinningIndex } from "../datasources/metaAds/inHouseAdsWinning";
 
 // In-memory data store — the ONLY place that holds mutable dashboard state.
 //
@@ -36,6 +37,14 @@ interface Store {
   // it survives a page refresh instead of vanishing (it used to live only in React state).
   // Uploading a new CSV replaces this outright; there's no history of prior uploads.
   creditsData: CreditsData | null;
+  // The In House Ads Copy Writer group's own winning-check result (see
+  // config.inHouseAdsWinningRule + inHouseAdsWinning.ts) — only refreshed when this sync cycle
+  // actually fetches Meta live (same fetchMetaLive gate as the main Meta index); otherwise the
+  // last-known result here is reused as-is, same "don't revert to unknown just because today
+  // wasn't a Meta-fetch day" principle as the main sync's backfill-sheet fallback, just via an
+  // in-memory cache instead of a persisted sheet (lower stakes: Copy Writer tab-only, not the
+  // Performance tab).
+  inHouseAdsWinning: InHouseAdsWinningIndex;
 }
 
 function createEmptyStore(): Store {
@@ -54,6 +63,7 @@ function createEmptyStore(): Store {
     metaSyncDailyLastRunDate: null,
     monthlyReportLastSentMonth: null,
     creditsData: null,
+    inHouseAdsWinning: { testedTitles: {}, winningTitles: {} },
   };
 }
 

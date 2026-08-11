@@ -142,6 +142,37 @@ function parseWinningCampaignIdOverrides(value: string | undefined): Record<stri
   return map;
 }
 
+export interface InHouseAdsWinningRegionRule {
+  testingAccountId: string;
+  testingCampaignIds: string[];
+  scalingAccountId: string;
+  scalingCampaignIds: string[];
+}
+
+// Override via IN_HOUSE_ADS_WINNING_RULE="Region|testingAccountId|campaignId1,campaignId2|
+// scalingAccountId|campaignId1,campaignId2;Other Region|...". ";" separates regions, "|" separates
+// fields within one, "," separates campaign ids within a field.
+function parseInHouseAdsWinningRule(value: string | undefined): Record<string, InHouseAdsWinningRegionRule> {
+  const map: Record<string, InHouseAdsWinningRegionRule> = {};
+  if (!value) return map;
+
+  for (const entry of value.split(";").map((s) => s.trim()).filter(Boolean)) {
+    const [region, testingAccountId, testingCampaignIdsRaw, scalingAccountId, scalingCampaignIdsRaw] = entry
+      .split("|")
+      .map((s) => s.trim());
+    if (!region || !testingAccountId || !scalingAccountId) continue;
+
+    map[region] = {
+      testingAccountId,
+      testingCampaignIds: csv(testingCampaignIdsRaw),
+      scalingAccountId,
+      scalingCampaignIds: csv(scalingCampaignIdsRaw),
+    };
+  }
+
+  return map;
+}
+
 export const config = {
   googleSheets: {
     // Two supported auth modes: a plain API key (works for link-shared/public sheets, no
@@ -269,6 +300,30 @@ export const config = {
         csv(process.env.IN_HOUSE_ADS_SHEET_TABS_2).length > 0 ? csv(process.env.IN_HOUSE_ADS_SHEET_TABS_2) : ["August 2026", "July 2026"],
     },
   ].filter((s) => s.sheetId),
+  // In House Ads' OWN winning rule — completely separate Meta accounts from metaAds.adAccountIds
+  // above (never onboarded into the main sync/Performance tab, per the earlier decision to keep
+  // this Copy Writer tab-only), checked directly by campaign membership: an ad is "winning" if a
+  // duplicate of it (by normalized title, same as everywhere else — see normalizeTitleForMatching)
+  // is found in the region's scaling campaign, which for Astrotalk lives in a WHOLLY DIFFERENT ad
+  // account than the testing one (Lumus's scaling campaign is in the same account as its testing
+  // ones). Region keys match cohortForRegion's labels in inHouseAds.ts.
+  inHouseAdsWinningRule:
+    Object.keys(parseInHouseAdsWinningRule(process.env.IN_HOUSE_ADS_WINNING_RULE)).length > 0
+      ? parseInHouseAdsWinningRule(process.env.IN_HOUSE_ADS_WINNING_RULE)
+      : {
+          Astrotalk: {
+            testingAccountId: "958327102815246",
+            testingCampaignIds: ["120237565842190567", "120237749922160567"],
+            scalingAccountId: "1915005495909687",
+            scalingCampaignIds: ["120243783568220784"],
+          },
+          Lumus: {
+            testingAccountId: "501663405752517",
+            testingCampaignIds: ["120250070692850051", "120250641578890051"],
+            scalingAccountId: "501663405752517",
+            scalingCampaignIds: ["120247762225480051"],
+          },
+        },
   // Business units in this list still get their own selectable Performance-tab, but are left out
   // of the "All" combined view/summary and the Slack leaderboard's cross-unit ranking — see
   // PerformanceTab.tsx's combineRowsByEditor and leaderboardService.ts's getTopEditorsByMainAds.

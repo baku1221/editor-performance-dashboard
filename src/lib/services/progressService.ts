@@ -66,6 +66,13 @@ export async function getProgressData(filters: DashboardFilters): Promise<Progre
     .filter((item) => editorMatchesFilter(item.editorName, filters))
     .map((item) => {
       if (item.status !== "Completed") return item; // only meaningful once actually done
+      // A cohort with no COHORT_TO_BUSINESS_UNIT entry (the In House Ads cohorts) has no
+      // PublishedVideo pool to match against here at all — matchVideo would just bail to null
+      // regardless, but doing that UNCONDITIONALLY on every Completed item clobbered a value that
+      // cohort's own fetch step had already correctly computed a different way (see
+      // inHouseAds.ts's own winning check against config.inHouseAdsWinningRule) back to null on
+      // every request. Leaving the item as-is here is what lets that value survive.
+      if (!(item.cohort in COHORT_TO_BUSINESS_UNIT)) return item;
       const match = matchVideo(item, videos);
       return {
         ...item,

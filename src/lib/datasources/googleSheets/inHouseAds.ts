@@ -2,8 +2,9 @@ import type { ProgressItem } from "../../types";
 import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
+import type { InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
 import { fetchSheetTable } from "./client";
-import { parseTabMonth, withCurrentMonthTab } from "./driveCreatives";
+import { normalizeTitleForMatching, parseTabMonth, withCurrentMonthTab } from "./driveCreatives";
 
 // The cohort prefix used throughout the app (ProgressItem.cohort, the Copy Writer tab's group
 // selector, the Daily Progress exclusion filter) for every row sourced from config.inHouseAdsSheets
@@ -21,12 +22,35 @@ const REGION_TO_LABEL: Record<string, string> = {
   angrez: "Astrotalk",
 };
 
+/** The bare region label ("Lumus"/"Astrotalk") — also config.inHouseAdsWinningRule's own keys,
+ * so a row's winning check (see matchedIsWinningFor) looks up the same region this resolves to. */
+function regionLabelFor(region: string): string | undefined {
+  return REGION_TO_LABEL[region.trim().toLowerCase()];
+}
+
 function cohortForRegion(region: string): string {
-  const label = REGION_TO_LABEL[region.trim().toLowerCase()];
+  const label = regionLabelFor(region);
   // Falls back to the bare prefix (not one of the two known sub-cohorts) for any future/unmapped
   // region value — still excluded from Daily Progress and from Foreign/India (see matchesGroup's
   // prefix check), just won't show up under either Astrotalk/Lumus sub-tab until mapped here.
   return label ? `${IN_HOUSE_ADS_COHORT_PREFIX} ${label}` : IN_HOUSE_ADS_COHORT_PREFIX;
+}
+
+/**
+ * true if a duplicate of this row's own title (by normalized text, same normalizeTitleForMatching
+ * used everywhere else) was found in the region's SCALING account/campaigns (see
+ * config.inHouseAdsWinningRule) — the actual winning signal. false if it was found in the TESTING
+ * side but never made it to scaling — tested, just not (yet) a winner. null if it wasn't found in
+ * either at all — never even tested on Meta, so (same "eligible" principle as
+ * scriptWriterService.ts's Completed-and-matched denominator for the other Copy Writer groups)
+ * this shouldn't count against the writer's winning % either way.
+ */
+function matchedIsWinningFor(name: string, region: string | undefined, winningIndex: InHouseAdsWinningIndex): boolean | null {
+  if (!region) return null;
+  const key = normalizeTitleForMatching(name);
+  if (winningIndex.winningTitles[region]?.has(key)) return true;
+  if (winningIndex.testedTitles[region]?.has(key)) return false;
+  return null;
 }
 
 const HEADER_ALIASES = {
@@ -123,18 +147,23 @@ function normalizeUploadDate(raw: string, sourceMonth: string): string {
  * driveCreatives.ts does) — writing the copy for a static ad is still copywriting work, even
  * though this app doesn't track static editors' video performance.
  *
- * matchedIsWinning/matchedDurationSeconds/matchedTakenLive stay null forever for this cohort —
- * there's no COHORT_TO_BUSINESS_UNIT entry for either In House Ads cohort (see progressService.ts),
- * so getProgressData's matching never has a business unit to match against. That's intentional,
- * not a bug: neither sheet has CPI/spend data, and their Meta ad account isn't onboarded into the
- * sync, so there's no live data to determine "winning" from yet.
+ * matchedIsWinning is resolved against `winningIndex` (see inHouseAdsWinning.ts and
+ * matchedIsWinningFor above) — a completely separate check from progressService.ts's
+ * PublishedVideo-based matching used by every other Copy Writer group (there's still no
+ * COHORT_TO_BUSINESS_UNIT entry for either In House Ads cohort, so that path never fires here).
+ * matchedDurationSeconds/matchedTakenLive stay null regardless — the winning check doesn't fetch
+ * duration or live-status, only ad identity, and nothing else in this app needs those two fields
+ * for this cohort.
  *
  * Each sheet+tab is isolated in its own try/catch, same resilience principle as
  * fetchDriveCreativeRows — one sheet not actually being link-shared, or a renamed/missing tab,
  * must not wipe out the other sheet's rows or (via fetchProgressTracker, which calls this) the
  * Ad Tracker sheet's own successful fetch.
  */
-export async function fetchInHouseAdsProgress(roster: EditorRosterEntry[] = config.editorRoster): Promise<ProgressItem[]> {
+export async function fetchInHouseAdsProgress(
+  roster: EditorRosterEntry[] = config.editorRoster,
+  winningIndex: InHouseAdsWinningIndex = { testedTitles: {}, winningTitles: {} }
+): Promise<ProgressItem[]> {
   const items: ProgressItem[] = [];
 
   for (const sheet of config.inHouseAdsSheets) {
@@ -152,6 +181,7 @@ export async function fetchInHouseAdsProgress(roster: EditorRosterEntry[] = conf
 
             const editorNameRaw = cellAt(row, locator.editorName);
             const scriptWriterRaw = parseCopywriterFromName(name, config.scriptWriterRoster);
+            const region = regionLabelFor(cellAt(row, locator.region));
 
             items.push({
               id: `inhouse:${sheet.sheetId}:${tab}::${index}`,
@@ -163,7 +193,7 @@ export async function fetchInHouseAdsProgress(roster: EditorRosterEntry[] = conf
               startedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
               completedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
               cohort: cohortForRegion(cellAt(row, locator.region)),
-              matchedIsWinning: null,
+              matchedIsWinning: matchedIsWinningFor(name, region, winningIndex),
               matchedDurationSeconds: null,
               matchedTakenLive: null,
             });

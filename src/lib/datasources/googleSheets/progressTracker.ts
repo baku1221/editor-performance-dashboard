@@ -2,6 +2,7 @@ import type { ProgressItem, ProgressStatus } from "../../types";
 import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
+import type { InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
 import { fetchSheetTable } from "./client";
 import { fetchInHouseAdsProgress } from "./inHouseAds";
 
@@ -79,8 +80,15 @@ function cellAt(row: string[], index: number | undefined): string {
  * `roster` defaults to the env-configured EDITOR_ROSTER but callers pass the merged roster
  * (env + editors added via the dashboard's "Add editor" UI) so newly-added editors are
  * recognized here too, not just in Meta-video attribution.
+ *
+ * `winningIndex` (see inHouseAdsWinning.ts) feeds the In House Ads rows' own winning check —
+ * defaults to an empty index (nothing tested/winning yet) so this still works standalone (e.g. in
+ * a test) without a live Meta fetch.
  */
-export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.editorRoster): Promise<ProgressItem[]> {
+export async function fetchProgressTracker(
+  roster: EditorRosterEntry[] = config.editorRoster,
+  winningIndex: InHouseAdsWinningIndex = { testedTitles: {}, winningTitles: {} }
+): Promise<ProgressItem[]> {
   const { sheetId, tabs } = config.googleSheets.progressTracker;
   if (!sheetId) {
     throw new Error("PROGRESS_TRACKER_SHEET_ID is not set in .env.local");
@@ -123,7 +131,7 @@ export async function fetchProgressTracker(roster: EditorRosterEntry[] = config.
       });
   }
 
-  items.push(...(await fetchInHouseAdsProgress(roster)));
+  items.push(...(await fetchInHouseAdsProgress(roster, winningIndex)));
 
   return items;
 }
