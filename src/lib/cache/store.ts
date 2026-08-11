@@ -1,6 +1,6 @@
 import type { ProgressItem, PublishedVideo, SyncStatus } from "../types";
 import type { CreditRow } from "../creditsDashboard";
-import type { InHouseAdsWinningIndex } from "../datasources/metaAds/inHouseAdsWinning";
+import { EMPTY_IN_HOUSE_ADS_WINNING_INDEX, type InHouseAdsWinningIndex } from "../datasources/metaAds/inHouseAdsWinning";
 
 // In-memory data store — the ONLY place that holds mutable dashboard state.
 //
@@ -63,7 +63,7 @@ function createEmptyStore(): Store {
     metaSyncDailyLastRunDate: null,
     monthlyReportLastSentMonth: null,
     creditsData: null,
-    inHouseAdsWinning: { testedTitles: {}, winningTitles: {} },
+    inHouseAdsWinning: EMPTY_IN_HOUSE_ADS_WINNING_INDEX,
   };
 }
 

@@ -56,7 +56,9 @@ export function ScriptWriterDetailPanel({
                     <th className="px-3 py-2.5 font-medium">Cohort</th>
                     <th className="px-3 py-2.5 font-medium">Status</th>
                     <th className="px-3 py-2.5 font-medium">Taken Live</th>
+                    <th className="px-3 py-2.5 font-medium">Tested On</th>
                     <th className="px-3 py-2.5 font-medium">Winning Creative</th>
+                    <th className="px-3 py-2.5 font-medium">Scaled On</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -81,6 +83,10 @@ export function ScriptWriterDetailPanel({
                           <span className="rounded-full bg-app-border px-2 py-0.5 text-xs font-medium text-app-muted">Not yet</span>
                         )}
                       </td>
+                      {/* In House Ads only (see inHouseAdsWinning.ts) — null for every other Copy
+                          Writer group, since PublishedVideo-based matching has no equivalent
+                          "when was this created in testing/scaling" concept to show here. */}
+                      <td className="px-3 py-2.5 text-app-muted">{item.matchedTestedDate ?? "—"}</td>
                       <td className="px-3 py-2.5">
                         {item.matchedIsWinning === null ? (
                           <span className="text-app-dim">—</span>
@@ -90,6 +96,7 @@ export function ScriptWriterDetailPanel({
                           <span className="rounded-full bg-app-border px-2 py-0.5 text-xs font-medium text-app-muted">No</span>
                         )}
                       </td>
+                      <td className="px-3 py-2.5 text-app-muted">{item.matchedScaledDate ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>

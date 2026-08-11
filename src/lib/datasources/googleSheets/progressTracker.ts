@@ -2,7 +2,7 @@ import type { ProgressItem, ProgressStatus } from "../../types";
 import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
-import type { InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
+import { EMPTY_IN_HOUSE_ADS_WINNING_INDEX, type InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
 import { fetchSheetTable } from "./client";
 import { fetchInHouseAdsProgress } from "./inHouseAds";
 
@@ -87,7 +87,7 @@ function cellAt(row: string[], index: number | undefined): string {
  */
 export async function fetchProgressTracker(
   roster: EditorRosterEntry[] = config.editorRoster,
-  winningIndex: InHouseAdsWinningIndex = { testedTitles: {}, winningTitles: {} }
+  winningIndex: InHouseAdsWinningIndex = EMPTY_IN_HOUSE_ADS_WINNING_INDEX
 ): Promise<ProgressItem[]> {
   const { sheetId, tabs } = config.googleSheets.progressTracker;
   if (!sheetId) {
@@ -127,6 +127,9 @@ export async function fetchProgressTracker(
           matchedIsWinning: null,
           matchedDurationSeconds: null,
           matchedTakenLive: null,
+          // Only meaningful for In House Ads rows (see inHouseAds.ts) — this cohort has none.
+          matchedTestedDate: null,
+          matchedScaledDate: null,
         });
       });
   }

@@ -23,6 +23,12 @@ export interface ProgressItem {
   matchedIsWinning: boolean | null;
   matchedDurationSeconds: number | null;
   matchedTakenLive: boolean | null;
+  // In House Ads cohorts only (see inHouseAdsWinning.ts) — when this concept was first created in
+  // its region's testing campaign, and (if it ever got there) first created in the scaling
+  // account/campaign. Both null for every other cohort, and for an In House Ads row that was
+  // never found on Meta at all (matchedIsWinning also null in that case).
+  matchedTestedDate: string | null;
+  matchedScaledDate: string | null;
 }
 
 export interface ScriptWriterRow {

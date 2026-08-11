@@ -2,7 +2,7 @@ import type { ProgressItem } from "../../types";
 import { config, type EditorRosterEntry } from "../../config";
 import { normalizeToIsoDate } from "../../dates";
 import { normalizeEditorName } from "../../services/editorTitleParser";
-import type { InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
+import { EMPTY_IN_HOUSE_ADS_WINNING_INDEX, type InHouseAdsWinningIndex } from "../metaAds/inHouseAdsWinning";
 import { fetchSheetTable } from "./client";
 import { normalizeTitleForMatching, parseTabMonth, withCurrentMonthTab } from "./driveCreatives";
 
@@ -36,21 +36,32 @@ function cohortForRegion(region: string): string {
   return label ? `${IN_HOUSE_ADS_COHORT_PREFIX} ${label}` : IN_HOUSE_ADS_COHORT_PREFIX;
 }
 
-/**
- * true if a duplicate of this row's own title (by normalized text, same normalizeTitleForMatching
- * used everywhere else) was found in the region's SCALING account/campaigns (see
- * config.inHouseAdsWinningRule) — the actual winning signal. false if it was found in the TESTING
- * side but never made it to scaling — tested, just not (yet) a winner. null if it wasn't found in
- * either at all — never even tested on Meta, so (same "eligible" principle as
- * scriptWriterService.ts's Completed-and-matched denominator for the other Copy Writer groups)
- * this shouldn't count against the writer's winning % either way.
- */
-function matchedIsWinningFor(name: string, region: string | undefined, winningIndex: InHouseAdsWinningIndex): boolean | null {
-  if (!region) return null;
+interface InHouseAdsMetaMatch {
+  // true if a duplicate of this row's own title (by normalized text, same
+  // normalizeTitleForMatching used everywhere else) was found in the region's SCALING
+  // account/campaigns (see config.inHouseAdsWinningRule) — the actual winning signal. false if it
+  // was found in the TESTING side but never made it to scaling — tested, just not (yet) a winner.
+  // null if it wasn't found in either at all — never even tested on Meta, so (same "eligible"
+  // principle as scriptWriterService.ts's Completed-and-matched denominator for the other Copy
+  // Writer groups) this shouldn't count against the writer's winning % either way.
+  isWinning: boolean | null;
+  // When this concept was first created in the region's testing campaign — null alongside
+  // isWinning=null (never found at all).
+  testedDate: string | null;
+  // When it was first created in the SCALING account/campaign — null unless isWinning is true.
+  scaledDate: string | null;
+}
+
+function matchInHouseAdsMeta(name: string, region: string | undefined, winningIndex: InHouseAdsWinningIndex): InHouseAdsMetaMatch {
+  if (!region) return { isWinning: null, testedDate: null, scaledDate: null };
+
   const key = normalizeTitleForMatching(name);
-  if (winningIndex.winningTitles[region]?.has(key)) return true;
-  if (winningIndex.testedTitles[region]?.has(key)) return false;
-  return null;
+  const testedDate = winningIndex.testedDates[region]?.get(key) ?? null;
+  const scaledDate = winningIndex.scaledDates[region]?.get(key) ?? null;
+
+  if (winningIndex.winningTitles[region]?.has(key)) return { isWinning: true, testedDate, scaledDate };
+  if (winningIndex.testedTitles[region]?.has(key)) return { isWinning: false, testedDate, scaledDate: null };
+  return { isWinning: null, testedDate: null, scaledDate: null };
 }
 
 const HEADER_ALIASES = {
@@ -147,13 +158,13 @@ function normalizeUploadDate(raw: string, sourceMonth: string): string {
  * driveCreatives.ts does) — writing the copy for a static ad is still copywriting work, even
  * though this app doesn't track static editors' video performance.
  *
- * matchedIsWinning is resolved against `winningIndex` (see inHouseAdsWinning.ts and
- * matchedIsWinningFor above) — a completely separate check from progressService.ts's
- * PublishedVideo-based matching used by every other Copy Writer group (there's still no
- * COHORT_TO_BUSINESS_UNIT entry for either In House Ads cohort, so that path never fires here).
- * matchedDurationSeconds/matchedTakenLive stay null regardless — the winning check doesn't fetch
- * duration or live-status, only ad identity, and nothing else in this app needs those two fields
- * for this cohort.
+ * matchedIsWinning/matchedTestedDate/matchedScaledDate are resolved against `winningIndex` (see
+ * inHouseAdsWinning.ts and matchInHouseAdsMeta above) — a completely separate check from
+ * progressService.ts's PublishedVideo-based matching used by every other Copy Writer group
+ * (there's still no COHORT_TO_BUSINESS_UNIT entry for either In House Ads cohort, so that path
+ * never fires here). matchedDurationSeconds/matchedTakenLive stay null regardless — the winning
+ * check doesn't fetch duration or live-status, only ad identity + created_time, and nothing else
+ * in this app needs those two fields for this cohort.
  *
  * Each sheet+tab is isolated in its own try/catch, same resilience principle as
  * fetchDriveCreativeRows — one sheet not actually being link-shared, or a renamed/missing tab,
@@ -162,7 +173,7 @@ function normalizeUploadDate(raw: string, sourceMonth: string): string {
  */
 export async function fetchInHouseAdsProgress(
   roster: EditorRosterEntry[] = config.editorRoster,
-  winningIndex: InHouseAdsWinningIndex = { testedTitles: {}, winningTitles: {} }
+  winningIndex: InHouseAdsWinningIndex = EMPTY_IN_HOUSE_ADS_WINNING_INDEX
 ): Promise<ProgressItem[]> {
   const items: ProgressItem[] = [];
 
@@ -182,6 +193,7 @@ export async function fetchInHouseAdsProgress(
             const editorNameRaw = cellAt(row, locator.editorName);
             const scriptWriterRaw = parseCopywriterFromName(name, config.scriptWriterRoster);
             const region = regionLabelFor(cellAt(row, locator.region));
+            const metaMatch = matchInHouseAdsMeta(name, region, winningIndex);
 
             items.push({
               id: `inhouse:${sheet.sheetId}:${tab}::${index}`,
@@ -193,9 +205,11 @@ export async function fetchInHouseAdsProgress(
               startedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
               completedDate: normalizeUploadDate(cellAt(row, locator.uploadDates), sourceMonth),
               cohort: cohortForRegion(cellAt(row, locator.region)),
-              matchedIsWinning: matchedIsWinningFor(name, region, winningIndex),
+              matchedIsWinning: metaMatch.isWinning,
               matchedDurationSeconds: null,
               matchedTakenLive: null,
+              matchedTestedDate: metaMatch.testedDate,
+              matchedScaledDate: metaMatch.scaledDate,
             });
           });
       } catch (err) {

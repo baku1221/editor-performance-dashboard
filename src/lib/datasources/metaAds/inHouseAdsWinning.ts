@@ -1,10 +1,12 @@
 import { config } from "../../config";
+import { normalizeToIsoDate } from "../../dates";
 import { normalizeTitleForMatching } from "../googleSheets/driveCreatives";
 import { metaGraphGetAllPages } from "./client";
 
 interface MetaAdIdentity {
   id: string;
   name: string;
+  created_time: string;
 }
 
 /**
@@ -19,12 +21,33 @@ export interface InHouseAdsWinningIndex {
   testedTitles: Record<string, Set<string>>;
   // Normalized titles found specifically in the scaling account/campaigns — the winning signal.
   winningTitles: Record<string, Set<string>>;
+  // region -> normalized title -> earliest created_time seen for that title across BOTH the
+  // testing and scaling side (a title can have several duplicate ad objects; "when was this
+  // concept first put in front of Meta at all" is the earliest of all of them, same principle as
+  // the main sync's earliestCreatedByNormalizedTitle). Drives the Copy Writer detail panel's
+  // "Tested On" column.
+  testedDates: Record<string, Map<string, string>>;
+  // region -> normalized title -> earliest created_time seen specifically among the SCALING
+  // account/campaign's own ad objects for that title — when it was first promoted, not when it
+  // was first tested. Drives the detail panel's "Scaled On" column; absent entirely for a title
+  // that's only ever appeared in testing.
+  scaledDates: Record<string, Map<string, string>>;
 }
 
-const AD_FIELDS = "id,name";
+// Shared "nothing fetched yet" shape — reused as the default parameter value everywhere this
+// index is threaded through (cache/store.ts, progressTracker.ts, inHouseAds.ts) instead of each
+// repeating the same four-empty-collections literal.
+export const EMPTY_IN_HOUSE_ADS_WINNING_INDEX: InHouseAdsWinningIndex = {
+  testedTitles: {},
+  winningTitles: {},
+  testedDates: {},
+  scaledDates: {},
+};
 
-/** Ad identity only (id + name) — no insights, no creative/duration hops. This index only ever
- * needs to answer "does a duplicate of this title exist here", nothing else. */
+const AD_FIELDS = "id,name,created_time";
+
+/** Ad identity + created_time only — no insights, no creative/duration hops. This index only
+ * ever needs to answer "does a duplicate of this title exist here, and since when". */
 async function fetchAdIdentities(accountId: string, campaignIds: string[]): Promise<MetaAdIdentity[]> {
   if (campaignIds.length === 0) return [];
 
@@ -33,6 +56,12 @@ async function fetchAdIdentities(accountId: string, campaignIds: string[]): Prom
     limit: "200",
     filtering: JSON.stringify([{ field: "campaign.id", operator: "IN", value: campaignIds }]),
   });
+}
+
+function recordEarliest(map: Map<string, string>, key: string, date: string): void {
+  if (!date) return;
+  const existing = map.get(key);
+  if (!existing || date < existing) map.set(key, date);
 }
 
 /**
@@ -55,26 +84,39 @@ async function fetchAdIdentities(accountId: string, campaignIds: string[]): Prom
 export async function fetchInHouseAdsWinningIndex(): Promise<InHouseAdsWinningIndex> {
   const testedTitles: Record<string, Set<string>> = {};
   const winningTitles: Record<string, Set<string>> = {};
+  const testedDates: Record<string, Map<string, string>> = {};
+  const scaledDates: Record<string, Map<string, string>> = {};
 
   for (const [region, rule] of Object.entries(config.inHouseAdsWinningRule)) {
     const tested = new Set<string>();
     const winning = new Set<string>();
+    const testedAt = new Map<string, string>();
+    const scaledAt = new Map<string, string>();
 
     const [testingAds, scalingAds] = await Promise.all([
       fetchAdIdentities(rule.testingAccountId, rule.testingCampaignIds),
       fetchAdIdentities(rule.scalingAccountId, rule.scalingCampaignIds),
     ]);
 
-    for (const ad of testingAds) tested.add(normalizeTitleForMatching(ad.name));
-    for (const ad of scalingAds) {
+    for (const ad of testingAds) {
       const key = normalizeTitleForMatching(ad.name);
       tested.add(key);
+      recordEarliest(testedAt, key, normalizeToIsoDate(ad.created_time));
+    }
+    for (const ad of scalingAds) {
+      const key = normalizeTitleForMatching(ad.name);
+      const date = normalizeToIsoDate(ad.created_time);
+      tested.add(key);
       winning.add(key);
+      recordEarliest(testedAt, key, date);
+      recordEarliest(scaledAt, key, date);
     }
 
     testedTitles[region] = tested;
     winningTitles[region] = winning;
+    testedDates[region] = testedAt;
+    scaledDates[region] = scaledAt;
   }
 
-  return { testedTitles, winningTitles };
+  return { testedTitles, winningTitles, testedDates, scaledDates };
 }
