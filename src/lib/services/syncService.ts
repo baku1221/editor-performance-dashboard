@@ -127,6 +127,17 @@ function dedupeRows(rows: DriveCreativeRow[]): DriveCreativeRow[] {
  * ID and a "– Copy" suffix on the title, in a campaign this dashboard actually tracks. Same video
  * either way.
  *
+ * Both of these first two strategies are gated on the matched record's own businessUnit equaling
+ * the row's — confirmed real bug otherwise: metaIndex.byAdId/byNormalizedTitle are global across
+ * every Meta account, not scoped per business unit, so a wrong Meta Ad ID typed into (say) the
+ * Lumus sheet — a copy-paste slip, pointing at some unrelated Astrotalk Store ad — would happily
+ * match it, and the row would show that ad's own title/campaign name (e.g. a Hindi-titled ad
+ * under campaign "Testing Ai creatives India | PPP | AI") while still being credited to the Lumus
+ * editor who logged the row. The later word-subset/stage-segment fallbacks below already had this
+ * guard; these two just hadn't. Guarding rather than dropping the row outright when the ad id/title
+ * hits but the business unit doesn't — the chain still falls through to try the other strategies,
+ * so a genuinely correct match elsewhere in the row's own business unit isn't lost.
+ *
  * Falls back further to a word-subset match when even that fails — confirmed real case: a
  * pod/tracking code (e.g. "KGAT") sometimes gets appended to the ad title on Meta *after* the
  * sheet row was already logged, same underlying video either way. Only matches when one title's
@@ -155,9 +166,12 @@ function dedupeRows(rows: DriveCreativeRow[]): DriveCreativeRow[] {
  * is left unmatched rather than double-counted as "live" under two different rows.
  */
 function matchMetaAd(row: DriveCreativeRow, metaIndex: MetaAdsIndex, claimedAdIds: Set<string>): MetaAdRecord | undefined {
+  const byAdId = row.metaAdId ? metaIndex.byAdId.get(row.metaAdId) : undefined;
+  const byTitle = metaIndex.byNormalizedTitle.get(normalizeTitleForMatching(row.name));
+
   const candidate =
-    (row.metaAdId ? metaIndex.byAdId.get(row.metaAdId) : undefined) ??
-    metaIndex.byNormalizedTitle.get(normalizeTitleForMatching(row.name)) ??
+    (byAdId?.businessUnit === row.businessUnit ? byAdId : undefined) ??
+    (byTitle?.businessUnit === row.businessUnit ? byTitle : undefined) ??
     (() => {
       const rowWords = titleWordSet(row.name);
       const rowKind = resolveVideoKind(row.name, row.businessUnit);
