@@ -37,31 +37,33 @@ function cohortForRegion(region: string): string {
 }
 
 interface InHouseAdsMetaMatch {
-  // true if a duplicate of this row's own title (by normalized text, same
-  // normalizeTitleForMatching used everywhere else) was found in the region's SCALING
-  // account/campaigns (see config.inHouseAdsWinningRule) — the actual winning signal. false if it
-  // was found in the TESTING side but never made it to scaling — tested, just not (yet) a winner.
-  // null if it wasn't found in either at all — never even tested on Meta, so (same "eligible"
-  // principle as scriptWriterService.ts's Completed-and-matched denominator for the other Copy
-  // Writer groups) this shouldn't count against the writer's winning % either way.
-  isWinning: boolean | null;
-  // When this concept was first created in the region's testing campaign — null alongside
-  // isWinning=null (never found at all).
+  // Source of truth is the sheet row itself, not a "was this ever tested" gate — true if a
+  // duplicate of this row's own title (by normalized text, same normalizeTitleForMatching used
+  // everywhere else) was found in the region's SCALING account/campaigns (see
+  // config.inHouseAdsWinningRule); false otherwise. Deliberately never null/excluded: an earlier
+  // version treated "not found in the testing campaign" as "never tested, exclude from the %",
+  // but testing-campaign ads get cleaned up/deleted over time on Meta's side — an older concept
+  // that genuinely was tested (and even scaled) can no longer show as present in testing by the
+  // time this runs, which made plenty of real winners' OWN denominators look inconsistent. Scaling
+  // campaigns aren't pruned the same way, so "found in scaling" alone is the reliable signal;
+  // every sheet row counts toward the % either way, exactly like a plain win-rate.
+  isWinning: boolean;
+  // Informational only, best-effort — when this concept was first seen in the region's testing
+  // campaign as of THIS sync, if it's still there. null doesn't mean "never tested", just "not
+  // present in testing right now" (see isWinning's comment) — never used to decide isWinning.
   testedDate: string | null;
   // When it was first created in the SCALING account/campaign — null unless isWinning is true.
   scaledDate: string | null;
 }
 
 function matchInHouseAdsMeta(name: string, region: string | undefined, winningIndex: InHouseAdsWinningIndex): InHouseAdsMetaMatch {
-  if (!region) return { isWinning: null, testedDate: null, scaledDate: null };
+  if (!region) return { isWinning: false, testedDate: null, scaledDate: null };
 
   const key = normalizeTitleForMatching(name);
   const testedDate = winningIndex.testedDates[region]?.get(key) ?? null;
-  const scaledDate = winningIndex.scaledDates[region]?.get(key) ?? null;
+  const isWinning = winningIndex.winningTitles[region]?.has(key) ?? false;
 
-  if (winningIndex.winningTitles[region]?.has(key)) return { isWinning: true, testedDate, scaledDate };
-  if (winningIndex.testedTitles[region]?.has(key)) return { isWinning: false, testedDate, scaledDate: null };
-  return { isWinning: null, testedDate: null, scaledDate: null };
+  return { isWinning, testedDate, scaledDate: isWinning ? (winningIndex.scaledDates[region]?.get(key) ?? null) : null };
 }
 
 const HEADER_ALIASES = {

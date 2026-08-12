@@ -15,11 +15,11 @@ interface MetaAdIdentity {
  * cohortForRegion (inHouseAds.ts) produces ("Astrotalk"/"Lumus").
  */
 export interface InHouseAdsWinningIndex {
-  // Every normalized title seen in EITHER the testing or scaling campaigns — "this concept has
-  // actually been put in front of Meta at all" (the eligible/matched signal, distinct from
-  // "winning"). A title absent here was never even tested, not just not-yet-scaled.
-  testedTitles: Record<string, Set<string>>;
-  // Normalized titles found specifically in the scaling account/campaigns — the winning signal.
+  // Normalized titles found specifically in the scaling account/campaigns — the winning signal,
+  // and the ONLY thing that determines isWinning (see inHouseAds.ts's matchInHouseAdsMeta) — a
+  // title absent from testing is deliberately NOT treated as "not eligible", since testing
+  // campaigns get pruned/deleted over time on Meta's side and a genuinely-tested, even
+  // genuinely-scaled older concept can stop showing up there.
   winningTitles: Record<string, Set<string>>;
   // region -> normalized title -> earliest created_time seen for that title across BOTH the
   // testing and scaling side (a title can have several duplicate ad objects; "when was this
@@ -38,7 +38,6 @@ export interface InHouseAdsWinningIndex {
 // index is threaded through (cache/store.ts, progressTracker.ts, inHouseAds.ts) instead of each
 // repeating the same four-empty-collections literal.
 export const EMPTY_IN_HOUSE_ADS_WINNING_INDEX: InHouseAdsWinningIndex = {
-  testedTitles: {},
   winningTitles: {},
   testedDates: {},
   scaledDates: {},
@@ -82,13 +81,11 @@ function recordEarliest(map: Map<string, string>, key: string, date: string): vo
  * down to the same base title.
  */
 export async function fetchInHouseAdsWinningIndex(): Promise<InHouseAdsWinningIndex> {
-  const testedTitles: Record<string, Set<string>> = {};
   const winningTitles: Record<string, Set<string>> = {};
   const testedDates: Record<string, Map<string, string>> = {};
   const scaledDates: Record<string, Map<string, string>> = {};
 
   for (const [region, rule] of Object.entries(config.inHouseAdsWinningRule)) {
-    const tested = new Set<string>();
     const winning = new Set<string>();
     const testedAt = new Map<string, string>();
     const scaledAt = new Map<string, string>();
@@ -99,24 +96,20 @@ export async function fetchInHouseAdsWinningIndex(): Promise<InHouseAdsWinningIn
     ]);
 
     for (const ad of testingAds) {
-      const key = normalizeTitleForMatching(ad.name);
-      tested.add(key);
-      recordEarliest(testedAt, key, normalizeToIsoDate(ad.created_time));
+      recordEarliest(testedAt, normalizeTitleForMatching(ad.name), normalizeToIsoDate(ad.created_time));
     }
     for (const ad of scalingAds) {
       const key = normalizeTitleForMatching(ad.name);
       const date = normalizeToIsoDate(ad.created_time);
-      tested.add(key);
       winning.add(key);
       recordEarliest(testedAt, key, date);
       recordEarliest(scaledAt, key, date);
     }
 
-    testedTitles[region] = tested;
     winningTitles[region] = winning;
     testedDates[region] = testedAt;
     scaledDates[region] = scaledAt;
   }
 
-  return { testedTitles, winningTitles, testedDates, scaledDates };
+  return { winningTitles, testedDates, scaledDates };
 }

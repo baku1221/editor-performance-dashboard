@@ -23,10 +23,11 @@ export interface ProgressItem {
   matchedIsWinning: boolean | null;
   matchedDurationSeconds: number | null;
   matchedTakenLive: boolean | null;
-  // In House Ads cohorts only (see inHouseAdsWinning.ts) — when this concept was first created in
-  // its region's testing campaign, and (if it ever got there) first created in the scaling
-  // account/campaign. Both null for every other cohort, and for an In House Ads row that was
-  // never found on Meta at all (matchedIsWinning also null in that case).
+  // In House Ads cohorts only (see inHouseAdsWinning.ts) — matchedTestedDate is informational
+  // (when this concept was last seen in the region's testing campaign, if it still is one — see
+  // matchInHouseAdsMeta's own doc comment for why this is best-effort, not a gate), and
+  // matchedScaledDate is when it was first created in the SCALING account/campaign (null unless
+  // matchedIsWinning is true). Both always null for every other cohort.
   matchedTestedDate: string | null;
   matchedScaledDate: string | null;
 }
