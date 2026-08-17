@@ -86,6 +86,14 @@ export interface PublishedVideo {
   durationSeconds: number | null; // from the sheet row's own Drive link; independent of takenLive
   isWinning: boolean;
   winningSource: "rule" | "manual" | null;
+  // Total spend, summed across every duplicate ad object (see allCampaignIds) that lives in one
+  // of this business unit's configured scaling campaigns (config.winningCampaignIdOverrides) —
+  // only meaningful for a business unit that actually has one (Lumus/Astrotalk today); null for
+  // every other business unit, and null (not 0) when this concept has no duplicate in a scaling
+  // campaign at all. Distinct from `spend` above, which always prefers the TESTING-campaign
+  // duplicate's own number (see pickMetricsRecord in syncService.ts) — this is "how much has been
+  // spent scaling it", not "what CPI the team judges it against".
+  scaledSpend: number | null;
 }
 
 export interface DateRangeFilter {

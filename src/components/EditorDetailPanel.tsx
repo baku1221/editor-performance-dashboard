@@ -217,12 +217,13 @@ export function EditorDetailPanel({
                       <th className="px-3 py-2.5 font-medium">{showSpendInsteadOfCpi ? "Spend" : "CPI"}</th>
                       <th className="px-3 py-2.5 font-medium">Status</th>
                       <th className="px-3 py-2.5 font-medium">Winning</th>
+                      <th className="px-3 py-2.5 font-medium">Scaled Spend</th>
                     </tr>
                   </thead>
                   <tbody>
                     {visibleVideos.length === 0 && (
                       <tr>
-                        <td colSpan={11} className="px-3 py-6 text-center text-app-dim">
+                        <td colSpan={12} className="px-3 py-6 text-center text-app-dim">
                           No Main-version ads in the selected period — try "Include cuts".
                         </td>
                       </tr>
@@ -289,6 +290,13 @@ export function EditorDetailPanel({
                           ) : (
                             <span className="text-app-dim">—</span>
                           )}
+                        </td>
+                        {/* Lumus/Astrotalk only (config.winningCampaignIdOverrides) — total spend
+                            in the scaling campaign specifically, distinct from the Spend/CPI
+                            column above (which always reflects the testing side). null for every
+                            other business unit, or for a video that isn't Winning. */}
+                        <td className="px-3 py-2.5 text-app-muted">
+                          {video.isWinning && video.scaledSpend !== null ? video.scaledSpend.toFixed(2) : "—"}
                         </td>
                       </tr>
                     ))}

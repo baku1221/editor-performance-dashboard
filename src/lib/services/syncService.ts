@@ -239,6 +239,23 @@ function pickMetricsRecord(matched: MetaAdRecord, candidates: MetaAdRecord[], bu
 }
 
 /**
+ * Total spend across every duplicate that actually lives in one of this business unit's scaling
+ * campaigns (config.winningCampaignIdOverrides) — the "how much has been spent scaling this"
+ * number the Editor detail view shows once a video is Winning, distinct from pickMetricsRecord's
+ * displayed spend/CPI above (which deliberately prefers the TESTING side instead). Summed rather
+ * than picking one, since a concept can legitimately have a duplicate in more than one scaling
+ * campaign at once (e.g. Lumus's separate Android/iOS scaling campaigns). null for any business
+ * unit with no configured scaling campaigns at all (nothing to sum against) — not 0, so the UI can
+ * tell "not applicable" apart from "genuinely zero spend so far".
+ */
+function computeScaledSpend(businessUnit: string, candidates: MetaAdRecord[]): number | null {
+  const scalingCampaignIds = config.winningCampaignIdOverrides[businessUnit];
+  if (!scalingCampaignIds || scalingCampaignIds.length === 0) return null;
+
+  return candidates.filter((r) => scalingCampaignIds.includes(r.campaignId)).reduce((sum, r) => sum + r.spend, 0);
+}
+
+/**
  * Builds every video from the "<Business> AI Creatives" sheets (the primary source — see
  * types.ts's PublishedVideo doc comment) and enriches each with live Meta data when a match is
  * found. Best-effort on both sides: a sheet-fetch failure here throws (no primary data at all
@@ -291,6 +308,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       // only the metrics prefer the testing-campaign duplicate, see pickMetricsRecord's doc
       // comment for why these two shouldn't necessarily be the same ad object.
       const metricsRecord = pickMetricsRecord(matched, duplicateCandidates, row.businessUnit);
+      const scaledSpend = computeScaledSpend(row.businessUnit, duplicateCandidates);
 
       const video: PublishedVideo = {
         id: matched.id,
@@ -317,6 +335,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
         durationSeconds,
         isWinning: false,
         winningSource: null,
+        scaledSpend,
       };
       return video;
     }
@@ -346,6 +365,7 @@ async function buildVideosFromSheets(metaIndex: MetaAdsIndex, roster: EditorRost
       durationSeconds,
       isWinning: false,
       winningSource: null,
+      scaledSpend: null,
     };
     return video;
   });
